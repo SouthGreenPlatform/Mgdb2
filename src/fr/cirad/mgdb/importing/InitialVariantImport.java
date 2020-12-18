@@ -33,10 +33,15 @@ import java.util.TreeSet;
 import org.apache.log4j.Logger;
 import org.springframework.context.support.GenericXmlApplicationContext;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 
+import fr.cirad.mgdb.model.mongo.maintypes.Assembly;
+import fr.cirad.mgdb.model.mongo.maintypes.GenotypingProject;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantData;
 import fr.cirad.mgdb.model.mongo.subtypes.ReferencePosition;
 import fr.cirad.tools.Helper;
+import fr.cirad.tools.mongo.AutoIncrementCounter;
 import fr.cirad.tools.mongo.MongoTemplateManager;
 
 /**
@@ -49,6 +54,10 @@ public class InitialVariantImport {
 	
 	/** The Constant twoDecimalNF. */
 	static private final NumberFormat twoDecimalNF = NumberFormat.getInstance();
+	
+	static private final List<String> synonymColNames = Arrays.asList(VariantData.FIELDNAME_SYNONYM_TYPE_ID_ILLUMINA, VariantData.FIELDNAME_SYNONYM_TYPE_ID_NCBI, VariantData.FIELDNAME_SYNONYM_TYPE_ID_INTERNAL);
+	
+	static private final String ASSEMBLY_POSITION_PREFIX = "pos-";
 
 	static
 	{
@@ -125,7 +134,7 @@ public class InitialVariantImport {
 					throw new Exception("DATASOURCE '" + args[0] + "' is not supported!");
 			}
 
-			if (Helper.estimDocCount(mongoTemplate,VariantData.class) > 0)
+			if (Helper.estimDocCount(mongoTemplate, VariantData.class) > 0)
 				throw new Exception("There are already some variants in this database!");
 			
 			long before = System.currentTimeMillis();
@@ -141,10 +150,33 @@ public class InitialVariantImport {
 				if (sLine != null)
 					sLine = sLine.trim();
 				
+				List<String> fieldsExceptSynonyms = new ArrayList<>();
+				List<Assembly> assemblies = new ArrayList<>();
+				for (String colName : header) {
+					if (!synonymColNames.contains(colName))
+						fieldsExceptSynonyms.add(colName);
+					if (colName.startsWith(ASSEMBLY_POSITION_PREFIX)) {
+						String assemblyName = colName.substring(ASSEMBLY_POSITION_PREFIX.length());
+						Assembly assembly = mongoTemplate.findOne(new Query(Criteria.where(Assembly.FIELDNAME_NAME).is(assemblyName)), Assembly.class);
+						if (assembly == null) {
+							assembly = new Assembly(AutoIncrementCounter.getNextSequence(mongoTemplate, Assembly.class));
+							assembly.setName(assemblyName);
+							mongoTemplate.save(assembly);
+							LOG.info("Assembly \"" + assemblyName + "\" created for module " + args[0]);
+						}
+						assemblies.add(assembly);
+					}
+				}
+				if (assemblies.isEmpty()) {
+					if (!header.contains("pos"))
+						throw new Exception("No position column could be found");
+					assemblies.add(null);	// means default, unnamed assembly
+				}
+				
 				long count = 0;
 				int nNumberOfVariantsToSaveAtOnce = 50000;
 				ArrayList<VariantData> unsavedVariants = new ArrayList<VariantData>();
-				List<String> fieldsExceptSynonyms = Arrays.asList(new String[] {"id", "type", "pos", "chip"}); 
+//				List<String> fieldsExceptSynonyms = Arrays.asList(new String[] {"id", "type", "pos", "chip"}); 
 				do
 				{
 					if (sLine.length() > 0)
@@ -152,9 +184,11 @@ public class InitialVariantImport {
 						List<String> cells = Helper.split(sLine, "\t");
 						VariantData variant = new VariantData(cells.get(header.indexOf("id")));
 						variant.setType(cells.get(header.indexOf("type")));
-						String[] seqAndPos = cells.get(header.indexOf("pos")).split(":");
-						if (!seqAndPos[0].equals("0"))
-							variant.setReferencePosition(new ReferencePosition(seqAndPos[0], Long.parseLong(seqAndPos[1])));
+						for (Assembly assembly : assemblies) {
+							String[] seqAndPos = cells.get(header.indexOf(assembly == null ? "pos" : (ASSEMBLY_POSITION_PREFIX + assembly.getName()))).split(":");
+							if (seqAndPos.length == 2 && !seqAndPos[0].equals("0"))
+								variant.setReferencePosition(assembly == null ? 0 : assembly.getId(), new ReferencePosition(seqAndPos[0], Long.parseLong(seqAndPos[1])));
+						}
 						
 						if (!variant.getId().toString().startsWith("*"))	// otherwise it's a deprecated variant that we don't want to appear
 						{

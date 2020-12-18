@@ -20,6 +20,10 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLEncoder;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -45,15 +49,30 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.convert.MappingMongoConverter;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mongodb.BasicDBObject;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
+import com.mongodb.client.result.UpdateResult;
 import com.mongodb.connection.ServerDescription;
 
+import fr.cirad.mgdb.model.mongo.maintypes.Assembly;
+import fr.cirad.mgdb.model.mongo.maintypes.Database;
+import fr.cirad.mgdb.model.mongo.maintypes.GenotypingProject;
 import fr.cirad.tools.AppConfig;
 import fr.cirad.tools.Helper;
+//import fr.cirad.tools.mongo.MongoTemplateManager.ModuleAction;
+import htsjdk.tribble.index.Index;
+import htsjdk.tribble.index.tabix.TabixFormat;
+import htsjdk.tribble.index.tabix.TabixIndexCreator;
+import htsjdk.variant.variantcontext.Allele;
+import htsjdk.variant.variantcontext.VariantContext;
+import htsjdk.variant.variantcontext.VariantContextBuilder;
 
 /**
  * The Class MongoTemplateManager.
@@ -65,7 +84,12 @@ public class MongoTemplateManager implements ApplicationContextAware {
      * The Constant LOG.
      */
     static private final Logger LOG = Logger.getLogger(MongoTemplateManager.class);
+    
+    static private final String EUTILS_TAX_SEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=taxonomy&retmode=json&id=";
+	// static private final String EUTILS_TAX_SEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=taxonomy&retmode=json&term="; // this one may be used to find out taxid from scientific name
 
+    private static MongoTemplate commonsTemplate;
+    
     /**
      * The application context.
      */
@@ -76,20 +100,20 @@ public class MongoTemplateManager implements ApplicationContextAware {
      */
     static private Map<String, MongoTemplate> templateMap = new TreeMap<>();
     
-    /**
-     * The taxon map.
-     */
-    static private Map<String, String> taxonMap = new TreeMap<>();
-
-    /**
-     * The public databases.
-     */
-    static private Set<String> publicDatabases = new TreeSet<>();
-
-    /**
-     * The hidden databases.
-     */
-    static private List<String> hiddenDatabases = new ArrayList<>();
+//    /**
+//     * The taxon map.
+//     */
+//    static private Map<String, String> taxonMap = new TreeMap<>();
+//
+//    /**
+//     * The public databases.
+//     */
+//    static private Set<String> publicDatabases = new TreeSet<>();
+//
+//    /**
+//     * The hidden databases.
+//     */
+//    static private List<String> hiddenDatabases = new ArrayList<>();
 
     /**
      * The mongo clients.
@@ -154,18 +178,23 @@ public class MongoTemplateManager implements ApplicationContextAware {
     @Override
     public void setApplicationContext(ApplicationContext ac) throws BeansException {
         initialize(ac);
+        
+    	if (commonsTemplate == null)
+        	throw new Error("No commonsTemplate entry was found in applicationContext-data.xml");
+    	
         String serverCleanupCSV = appConfig.dbServerCleanup();
         List<String> authorizedCleanupServers = serverCleanupCSV == null ? null : Arrays.asList(serverCleanupCSV.split(","));
 
         // we do this cleanup here because it only happens when the webapp is being (re)started
-        for (String sModule : templateMap.keySet()) {
-        	List<ServerDescription> serverDescriptions = mongoClients.get(getModuleHost(sModule)).getClusterDescription().getServerDescriptions();
-            MongoTemplate mongoTemplate = templateMap.get(sModule);
+        for (Database db : commonsTemplate.findAll(Database.class)) { 
+//        for (String sModule : templateMap.keySet()) {
+         	List<ServerDescription> serverDescriptions = mongoClients.get(getModuleHost(db.getId())).getClusterDescription().getServerDescriptions();
+            MongoTemplate mongoTemplate = templateMap.get(db.getId());
             if (authorizedCleanupServers == null || (serverDescriptions.size() == 1 && authorizedCleanupServers.contains(serverDescriptions.get(0).getAddress().toString()))) {
                 for (String collName : mongoTemplate.getCollectionNames()) {
                     if (collName.startsWith(TEMP_COLL_PREFIX)) {
                         mongoTemplate.dropCollection(collName);
-                        LOG.debug("Dropped collection " + collName + " in module " + sModule);
+                        LOG.debug("Dropped collection " + collName + " in module " + db.getName());
                     }
                 }
             }
@@ -221,61 +250,133 @@ public class MongoTemplateManager implements ApplicationContextAware {
             LOG.error("Unable to find file " + resource + ".properties, you may need to adjust your classpath", mre);
         }
     }
+    
+    static public void parseTaxInfoAndAddToDB(String taxInfo, Database db) {
+    	if (taxInfo == null)
+    		return;
 
+		String[] ncbiTaxonIdNameAndSpecies = taxInfo.split(":");
+		if (ncbiTaxonIdNameAndSpecies.length != 3)
+			LOG.warn("Unparseable taxon info: " + taxInfo);
+		else {
+			try {
+				db.setTaxid(Integer.parseInt(ncbiTaxonIdNameAndSpecies[0]));
+			}
+			catch (NumberFormatException nfe) {
+				LOG.warn("Unparseable taxid info: " + ncbiTaxonIdNameAndSpecies[0]);
+			}
+			if (ncbiTaxonIdNameAndSpecies[1] != null)
+				db.setTaxon(ncbiTaxonIdNameAndSpecies[1]);
+			if (ncbiTaxonIdNameAndSpecies[2] != null)
+				db.setSpecies(ncbiTaxonIdNameAndSpecies[2]);
+		}
+    }
+
+    static public void fetchTaxonInfoForDB(Database db) {
+    	if (db.getTaxid() == null)
+    		return;
+
+		try {
+			Map taxInfo = new ObjectMapper().readValue(new URL(EUTILS_TAX_SEARCH_URL + db.getTaxid()), Map.class);
+			Map taxonResult = (Map) ((Map) taxInfo.get("result")).get("" + db.getTaxid());
+			db.setTaxon((String) taxonResult.get("scientificname"));
+			db.setSpecies("species".equals(taxonResult.get("rank")) ? db.getTaxon() : null);
+		} catch (IOException e) {
+			LOG.warn("Unable to parse EUTILS response searching info for taxon " + db.getTaxid(), e);
+		}
+    }
+    
     /**
      * Load data sources.
      */
     static public void loadDataSources() {
         templateMap.clear();
         mongoClients.clear();
-        publicDatabases.clear();
-        hiddenDatabases.clear();
-        try {
+//        publicDatabases.clear();
+//        hiddenDatabases.clear();
+//        try {
             mongoClients = applicationContext.getBeansOfType(MongoClient.class);
+            
+            commonsTemplate = applicationContext.getBeansOfType(MongoTemplate.class).get("commonsTemplate");
+//            commonsTemplate.dropCollection(Database.class);	/*FIXME: remove me after tests*/
 
-            dataSourceBundle = ResourceBundle.getBundle(resource, resourceControl);
-            Enumeration<String> bundleKeys = dataSourceBundle.getKeys();
-            while (bundleKeys.hasMoreElements()) {
-                String key = bundleKeys.nextElement();
-                String[] datasourceInfo = dataSourceBundle.getString(key).split(",");
-
-                if (datasourceInfo.length < 2) {
-                    LOG.error("Unable to deal with datasource info for key " + key + ". Datasource definition requires at least 2 comma-separated strings: mongo host bean name (defined in Spring application context) and database name");
-                    continue;
-                }
-
-                boolean fHidden = key.endsWith("*"), fPublic = key.startsWith("*");
-                String cleanKey = key.replaceAll("\\*", "");
-                if (cleanKey.length() == 0) {
-                	LOG.warn("Skipping unnamed datasource");
-                	continue;
-                }
-
-                if (templateMap.containsKey(cleanKey)) {
-                    LOG.error("Datasource " + cleanKey + " already exists!");
-                    continue;
-                }
-
-                try {
-                	if (datasourceInfo.length > 2)
-                		setTaxon(cleanKey, datasourceInfo[2]);
-                    templateMap.put(cleanKey, createMongoTemplate(datasourceInfo[0], datasourceInfo[1]));
-                    if (fPublic)
-                        publicDatabases.add(cleanKey);
-                    if (fHidden)
-                        hiddenDatabases.add(cleanKey);
-                    LOG.info("Datasource " + cleanKey + " loaded as " + (fPublic ? "public" : "private") + " and " + (fHidden ? "hidden" : "exposed"));
-                }
-                catch (UnknownHostException e) {
-                    LOG.warn("Unable to create MongoTemplate for module " + cleanKey + " (no such host)");
-                }
-                catch (Exception e) {
-                    LOG.warn("Unable to create MongoTemplate for module " + cleanKey, e);
-                }
+            try {	// see if we need to migrate datasources from file (old configuration mode) into DB (new configuration mode)
+	            dataSourceBundle = ResourceBundle.getBundle(resource, resourceControl);
+	            Enumeration<String> bundleKeys = dataSourceBundle.getKeys();
+	            while (bundleKeys.hasMoreElements()) {
+	                String key = bundleKeys.nextElement();
+	                String[] datasourceInfo = dataSourceBundle.getString(key).split(",");
+	
+	                if (datasourceInfo.length < 2) {
+	                    LOG.error("Unable to deal with datasource info for key " + key + ". Datasource definition requires at least 2 comma-separated strings: mongo host bean name (defined in Spring application context) and database name");
+	                    continue;
+	                }
+	
+	                boolean fHidden = key.endsWith("*"), fPublic = key.startsWith("*");
+	                String cleanKey = key.replaceAll("\\*", "");
+	                if (cleanKey.length() == 0) {
+	                	LOG.warn("Skipping unnamed datasource");
+	                	continue;
+	                }
+	
+	                if (templateMap.containsKey(cleanKey)) {
+	                    LOG.error("Datasource " + cleanKey + " already exists!");
+	                    continue;
+	                }
+	                
+	                Database db = commonsTemplate.findById(cleanKey, Database.class);
+	                if (db == null) {
+	                	LOG.info("Adding database to commons: " + cleanKey);
+	                	db = new Database(cleanKey);
+	                	db.setPublic(fPublic);
+	                	db.setHidden(fHidden);
+	                	db.setHost(datasourceInfo[0]);
+	                	db.setName(datasourceInfo[1]);
+	                	if (datasourceInfo.length > 2) {
+	                		parseTaxInfoAndAddToDB(datasourceInfo[2], db);
+	
+	//                			db.setSpecies(ncbiTaxonIdNameAndSpecies[2]);
+	//	                		if (ncbiTaxonIdNameAndSpecies.length > 1)
+	//	                			db.setTaxon(ncbiTaxonIdNameAndSpecies[1].isEmpty() ? db.getSpecies() : ncbiTaxonIdNameAndSpecies[1]);
+	//	                		if (ncbiTaxonIdNameAndSpecies.length > 0)
+	//	                			db.setTaxon(ncbiTaxonIdNameAndSpecies[1].isEmpty() ? db.getSpecies() : ncbiTaxonIdNameAndSpecies[1]);
+	//	                		try {
+	//								Map taxInfo = new ObjectMapper().readValue(new URL(EUTILS_TAX_SEARCH_URL + URLEncoder.encode(datasourceInfo[2], "UTF-8")), Map.class);
+	//								if (!"1".equals(((Map) taxInfo.get("esearchresult")).get("count")))
+	//									LOG.warn("Unable to find a single taxon id for name: " + datasourceInfo[2]);
+	//								else
+	//									db.setTaxid(Integer.parseInt(((List<String>) ((Map) taxInfo.get("esearchresult")).get("idlist")).get(0)));	// only 1 match, we're being lucky!
+	//							} catch (IOException e) {
+	//								LOG.warn("Unable to parse EUTILS response searching taxon id for name: " + datasourceInfo[2], e);
+	//							}
+	                		}
+	                	}
+	            		commonsTemplate.save(db);
+	                }
+	            
+            	try {
+            		File f = new ClassPathResource("/" + resource + ".properties").getFile();
+            		f.renameTo(new File(f.getAbsolutePath() + ".bak"));
+		            LOG.info("Datasources successfuly migrated from file to commons database");
+				} catch (IOException e) {
+					LOG.error("Error renaming " + resource + ".properties after migration into commons database");
+				}
             }
-        } catch (MissingResourceException mre) {
-            LOG.error("Unable to find file " + resource + ".properties, you may need to adjust your classpath", mre);
-        }
+            catch (MissingResourceException ignored) {}
+
+            for (Database db : commonsTemplate.findAll(Database.class))
+				try {
+					templateMap.put(db.getId(), createMongoTemplate(db.getHost(), db.getName()));
+				}
+	            catch (UnknownHostException e) {
+                  LOG.warn("Unable to create MongoTemplate for module " + db.getId() + " (no such host)");
+	            }
+	            catch (Exception e) {
+	              LOG.warn("Unable to create MongoTemplate for module " + db.getId(), e);
+	            }
+//        } catch (MissingResourceException mre) {
+//            LOG.error("Unable to find file " + resource + ".properties, you may need to adjust your classpath", mre);
+//        }
     }
 
     /**
@@ -294,141 +395,219 @@ public class MongoTemplateManager implements ApplicationContextAware {
         MongoTemplate mongoTemplate = new MongoTemplate(client, sDbName);
         ((MappingMongoConverter) mongoTemplate.getConverter()).setMapKeyDotReplacement(DOT_REPLACEMENT_STRING);
 		mongoTemplate.getDb().runCommand(new BasicDBObject("profile", 0));
+//		if (Helper.estimDocCount(mongoTemplate, Assembly.class) == 0) {
+//			Assembly defaultAssembly = new Assembly(0);
+//			mongoTemplate.save(defaultAssembly);
+//			LOG.info("Default assembly created for module " + sDbName);
+//		}
 
         return mongoTemplate;
     }
-
-    public enum ModuleAction {
-    	CREATE, UPDATE_STATUS, DELETE;
+    
+    public static void invokeSetters(Map<String, Object> fieldNamesAndValues, Object pojo) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException {
+		HashMap<String, Method> setterMap = new HashMap<>();
+		for (Method m : Database.class.getDeclaredMethods())
+			if (m.getName().startsWith("set") && m.getParameterCount() == 1)
+				setterMap.put(m.getName().substring(3).toLowerCase(), m);
+		
+		if (fieldNamesAndValues != null)
+			for (String fieldName : fieldNamesAndValues.keySet()) {
+				Method setter = setterMap.get(fieldName);
+				if (setter != null) {
+					Class<?> paramType = setter.getParameters()[0].getType();
+					try {
+						Method valueOfMethod = paramType.getDeclaredMethod("valueOf", String.class);
+						setter.invoke(pojo, valueOfMethod.invoke(null /*this is meant to be the instance but null is OK because we're calling a static method */, (String) fieldNamesAndValues.get(fieldName)));
+					}
+					catch (NoSuchMethodException nsme) {
+						setter.invoke(pojo, fieldNamesAndValues.get(fieldName));
+					}
+				}
+			}
     }
     
-    /**
-     * Saves or updates a data source.
-     *
-     * @param action the action to perform on the module
-     * @param sModule the module, with a leading * if public and/or a trailing * if hidden
-     * @param public flag telling whether or not the module shall be public, ignored for deletion
-	 * @param hidden flag telling whether or not the module shall be hidden, ignored for deletion
-     * @param sHost the host, only used for creation
-     * @param ncbiTaxonIdNameAndSpecies id and scientific name of the ncbi taxon (colon-separated), optional, ignored for deletion
-     * @param expiryDate the expiry date, only used for creation
-     * @throws Exception the exception
-     */
-    synchronized static public boolean saveOrUpdateDataSource(ModuleAction action, String sModule, boolean fPublic, boolean fHidden, String sHost, String ncbiTaxonIdNameAndSpecies, Long expiryDate) throws Exception
-    {	// as long as we keep all write operations in a single synchronized method, we should be safe
-    	if (get(sModule) == null) {
-    		if (!action.equals(ModuleAction.CREATE))
-    			throw new Exception("Module " + sModule + " does not exist!");
-    	}
-    	else if (action.equals(ModuleAction.CREATE))
-    		throw new Exception("Module " + sModule + " already exists!");
-    	
-    	FileOutputStream fos = null;
-        File f = new ClassPathResource("/" + resource + ".properties").getFile();
-    	FileReader fileReader = new FileReader(f);
-        Properties properties = new Properties();
-        properties.load(fileReader);
-        
-    	try
-    	{
-    		if (action.equals(ModuleAction.DELETE))
-    		{
-    	        String sModuleKey = (isModulePublic(sModule) ? "*" : "") + sModule + (isModuleHidden(sModule) ? "*" : "");
-                if (!properties.containsKey(sModuleKey))
-                {
-                	LOG.warn("Module could not be found in datasource.properties: " + sModule);
-                	return false;
-                }
-                properties.remove(sModuleKey);
-                fos = new FileOutputStream(f);
-                properties.store(fos, null);
-                return true;
-    		}
-	        else if (action.equals(ModuleAction.CREATE))
-	        {
-	            int nRetries = 0;
-		        while (nRetries < 100)
-		        {
-		            String sIndexForModule = nRetries == 0 ? "" : ("_" + nRetries);
-		            String sDbName = "mgdb2_" + sModule + sIndexForModule + (expiryDate == null ? "" : (EXPIRY_PREFIX + expiryDate));
-		            MongoTemplate mongoTemplate = createMongoTemplate(sHost, sDbName);
-		            if (mongoTemplate.getCollectionNames().size() > 0)
-		                nRetries++;	// DB already exists, let's try with a different DB name
-		            else
-		            {
-		                if (properties.containsKey(sModule) || properties.containsKey("*" + sModule) || properties.containsKey(sModule + "*") || properties.containsKey("*" + sModule + "*"))
-		                {
-		                	LOG.warn("Tried to create a module that already exists in datasource.properties: " + sModule);
-		                	return false;
-		                }
-		                String sModuleKey = (fPublic ? "*" : "") + sModule + (fHidden ? "*" : "");
-		                if (ncbiTaxonIdNameAndSpecies != null)
-		                	setTaxon(sModule, ncbiTaxonIdNameAndSpecies);
-		                properties.put(sModuleKey, sHost + "," + sDbName + "," + (ncbiTaxonIdNameAndSpecies == null ? "" : ncbiTaxonIdNameAndSpecies));
-		                fos = new FileOutputStream(f);
-		                properties.store(fos, null);
+	public static boolean createDataSource(String sModule, String sHost, Map<String, Object> customFields, Long expiryDate) throws Exception {
+        if (commonsTemplate.exists(new Query(Criteria.where("_id").is(sModule)), Database.class))
+        {
+        	LOG.warn("Tried to create a module that already exists: " + sModule);
+        	return false;
+        }
 
-		                templateMap.put(sModule, mongoTemplate);
-		                if (fPublic)
-		                    publicDatabases.add(sModule);
-		                if (fHidden)
-		                    hiddenDatabases.add(sModule);
-		                return true;
-		            }
-		        }
-		        throw new Exception("Unable to create a unique name for datasource " + sModule + " after " + nRetries + " retries");
-	        }
-	        else if (action.equals(ModuleAction.UPDATE_STATUS))
-	        {
-	        	String sModuleKey = (isModulePublic(sModule) ? "*" : "") + sModule + (isModuleHidden(sModule) ? "*" : "");
-                if (!properties.containsKey(sModuleKey))
-                {
-                	LOG.warn("Tried to update a module that could not be found in datasource.properties: " + sModule);
+		Database db = new Database(sModule);
+		db.setHost(sHost);
+
+		invokeSetters(customFields, db);
+		fetchTaxonInfoForDB(db);
+
+		int nRetries = 0;
+        while (nRetries < 100)
+        {
+            String sIndexForModule = nRetries == 0 ? "" : ("_" + nRetries);
+            String sDbName = "mgdb3_" + sModule + sIndexForModule + (expiryDate == null ? "" : (EXPIRY_PREFIX + expiryDate));
+            MongoTemplate mongoTemplate = createMongoTemplate(sHost, sDbName);
+            if (mongoTemplate.getCollectionNames().size() > 0)
+                nRetries++;	// DB already exists, let's try with a different DB name
+            else
+            {
+                db.setName(sDbName);
+                try {
+                	MongoTemplateManager.getCommonsTemplate().insert(db);
+                	templateMap.put(sModule, mongoTemplate);
+                	return true;
+                }
+                catch (Exception e) {
+                	LOG.error("Error creating database", e);
                 	return false;
                 }
-                String[] propValues = ((String) properties.get(sModuleKey)).split(",");
-                properties.remove(sModuleKey);
-                if (ncbiTaxonIdNameAndSpecies == null && getTaxonId(sModule) != null)
-                {
-                	String taxonName = getTaxonName(sModule), species = getSpecies(sModule);
-                	ncbiTaxonIdNameAndSpecies = getTaxonId(sModule) + ":" + (species != null && species.equals(taxonName) ? "" : taxonName) + ":" + (species != null ? species : "");
-                }
-                properties.put((fPublic ? "*" : "") + sModule + (fHidden ? "*" : ""), propValues[0] + "," + propValues[1] + "," + ncbiTaxonIdNameAndSpecies);
-                fos = new FileOutputStream(f);
-                properties.store(fos, null);
-                
-                if (fPublic)
-                    publicDatabases.add(sModule);
-                else
-                	publicDatabases.remove(sModule);
-                if (fHidden)
-                    hiddenDatabases.add(sModule);
-                else
-                	hiddenDatabases.remove(sModule);
-	        	return true;
-	        }
-	        else
-	        	throw new Exception("Unknown ModuleAction: " + action);
-        }
-    	catch (IOException ex)
-    	{
-            LOG.warn("Failed to update datasource.properties for action " + action + " on " + sModule, ex);
-            return false;
-        }
-    	finally
-    	{
-            try 
-            {
-           		fileReader.close();
-            	if (fos != null)
-            		fos.close();
-            } 
-            catch (IOException ex)
-            {
-                LOG.debug("Failed to close FileReader", ex);
             }
         }
-    }
+        throw new Exception("Unable to create a unique name for datasource " + sModule + " after " + nRetries + " retries");
+	}
+
+	public static boolean updateDataSource(String sModule, boolean fPublic, boolean fHidden, Map<String, Object> customFields) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException {
+		Database db = commonsTemplate.findById(sModule, Database.class);
+		if (db == null)
+			return false;
+
+		db.setHidden(fHidden);
+		db.setPublic(fPublic);
+		invokeSetters(customFields, db);
+		fetchTaxonInfoForDB(db);
+		commonsTemplate.save(db);
+		return true;
+	}
+
+//    public enum ModuleAction {
+//    	CREATE, UPDATE_STATUS, DELETE;
+//    }
+//    
+//    /**
+//     * Saves or updates a data source.
+//     *
+//     * @param action the action to perform on the module
+//     * @param sModule the module, with a leading * if public and/or a trailing * if hidden
+//     * @param public flag telling whether or not the module shall be public, ignored for deletion
+//	 * @param hidden flag telling whether or not the module shall be hidden, ignored for deletion
+//     * @param sHost the host, only used for creation
+//     * @param ncbiTaxonIdNameAndSpecies id and scientific name of the ncbi taxon (colon-separated), optional, ignored for deletion
+//     * @param expiryDate the expiry date, only used for creation
+//     * @throws Exception the exception
+//     */
+//    synchronized static public boolean saveOrUpdateDataSource(ModuleAction action, String sModule, boolean fPublic, boolean fHidden, String sHost, String ncbiTaxonIdNameAndSpecies, Long expiryDate) throws Exception
+//    {	// as long as we keep all write operations in a single synchronized method, we should be safe
+//    	if (get(sModule) == null) {
+//    		if (!action.equals(ModuleAction.CREATE))
+//    			throw new Exception("Module " + sModule + " does not exist!");
+//    	}
+//    	else if (action.equals(ModuleAction.CREATE))
+//    		throw new Exception("Module " + sModule + " already exists!");
+//    	
+//    	FileOutputStream fos = null;
+//        File f = new ClassPathResource("/" + resource + ".properties").getFile();
+//    	FileReader fileReader = new FileReader(f);
+//        Properties properties = new Properties();
+//        properties.load(fileReader);
+//        
+//    	try
+//    	{
+//    		if (action.equals(ModuleAction.DELETE))
+//    		{
+//    	        String sModuleKey = (isModulePublic(sModule) ? "*" : "") + sModule + (isModuleHidden(sModule) ? "*" : "");
+//                if (!properties.containsKey(sModuleKey))
+//                {
+//                	LOG.warn("Module could not be found in datasource.properties: " + sModule);
+//                	return false;
+//                }
+//                properties.remove(sModuleKey);
+//                fos = new FileOutputStream(f);
+//                properties.store(fos, null);
+//                return true;
+//    		}
+//	        else if (action.equals(ModuleAction.CREATE))
+//	        {
+//	            int nRetries = 0;
+//		        while (nRetries < 100)
+//		        {
+//		            String sIndexForModule = nRetries == 0 ? "" : ("_" + nRetries);
+//		            String sDbName = "mgdb2_" + sModule + sIndexForModule + (expiryDate == null ? "" : (EXPIRY_PREFIX + expiryDate));
+//		            MongoTemplate mongoTemplate = createMongoTemplate(sHost, sDbName);
+//		            if (mongoTemplate.getCollectionNames().size() > 0)
+//		                nRetries++;	// DB already exists, let's try with a different DB name
+//		            else
+//		            {
+//		                if (properties.containsKey(sModule) || properties.containsKey("*" + sModule) || properties.containsKey(sModule + "*") || properties.containsKey("*" + sModule + "*"))
+//		                {
+//		                	LOG.warn("Tried to create a module that already exists in datasource.properties: " + sModule);
+//		                	return false;
+//		                }
+//		                String sModuleKey = (fPublic ? "*" : "") + sModule + (fHidden ? "*" : "");
+//		                if (ncbiTaxonIdNameAndSpecies != null)
+//		                	setTaxon(sModule, ncbiTaxonIdNameAndSpecies);
+//		                properties.put(sModuleKey, sHost + "," + sDbName + "," + (ncbiTaxonIdNameAndSpecies == null ? "" : ncbiTaxonIdNameAndSpecies));
+//		                fos = new FileOutputStream(f);
+//		                properties.store(fos, null);
+//
+//		                templateMap.put(sModule, mongoTemplate);
+//		                if (fPublic)
+//		                    publicDatabases.add(sModule);
+//		                if (fHidden)
+//		                    hiddenDatabases.add(sModule);
+//		                return true;
+//		            }
+//		        }
+//		        throw new Exception("Unable to create a unique name for datasource " + sModule + " after " + nRetries + " retries");
+//	        }
+//	        else if (action.equals(ModuleAction.UPDATE_STATUS))
+//	        {
+//	        	String sModuleKey = (isModulePublic(sModule) ? "*" : "") + sModule + (isModuleHidden(sModule) ? "*" : "");
+//                if (!properties.containsKey(sModuleKey))
+//                {
+//                	LOG.warn("Tried to update a module that could not be found in datasource.properties: " + sModule);
+//                	return false;
+//                }
+//                String[] propValues = ((String) properties.get(sModuleKey)).split(",");
+//                properties.remove(sModuleKey);
+//                if (ncbiTaxonIdNameAndSpecies == null && getTaxonId(sModule) != null)
+//                {
+//                	String taxonName = getTaxonName(sModule), species = getSpecies(sModule);
+//                	ncbiTaxonIdNameAndSpecies = getTaxonId(sModule) + ":" + (species != null && species.equals(taxonName) ? "" : taxonName) + ":" + (species != null ? species : "");
+//                }
+//                properties.put((fPublic ? "*" : "") + sModule + (fHidden ? "*" : ""), propValues[0] + "," + propValues[1] + "," + ncbiTaxonIdNameAndSpecies);
+//                fos = new FileOutputStream(f);
+//                properties.store(fos, null);
+//                
+//                if (fPublic)
+//                    publicDatabases.add(sModule);
+//                else
+//                	publicDatabases.remove(sModule);
+//                if (fHidden)
+//                    hiddenDatabases.add(sModule);
+//                else
+//                	hiddenDatabases.remove(sModule);
+//	        	return true;
+//	        }
+//	        else
+//	        	throw new Exception("Unknown ModuleAction: " + action);
+//        }
+//    	catch (IOException ex)
+//    	{
+//            LOG.warn("Failed to update datasource.properties for action " + action + " on " + sModule, ex);
+//            return false;
+//        }
+//    	finally
+//    	{
+//            try 
+//            {
+//           		fileReader.close();
+//            	if (fos != null)
+//            		fos.close();
+//            } 
+//            catch (IOException ex)
+//            {
+//                LOG.debug("Failed to close FileReader", ex);
+//            }
+//        }
+//    }
 
     /**
      * Removes the data source.
@@ -441,18 +620,18 @@ public class MongoTemplateManager implements ApplicationContextAware {
         try
         {
             String key = sModule.replaceAll("\\*", "");
-        	saveOrUpdateDataSource(ModuleAction.DELETE, key, false, false, null, null, null);	// only this unique synchronized method may write to file safely
+            commonsTemplate.remove(new Query(Criteria.where("_id").is(sModule)), Database.class);
 
             if (fAlsoDropDatabase)
                 templateMap.get(key).getDb().drop();
             templateMap.remove(key);
-            publicDatabases.remove(key);
-            hiddenDatabases.remove(key);
+//            publicDatabases.remove(key);
+//            hiddenDatabases.remove(key);
             return true;
         }
         catch (Exception ex)
         {
-            LOG.warn("Failed to remove " + sModule + " from datasource.properties", ex);
+            LOG.warn("Failed to remove datasource " + sModule, ex);
             return false;
         }
     }
@@ -500,7 +679,7 @@ public class MongoTemplateManager implements ApplicationContextAware {
      * @return the public database names
      */
     static public Collection<String> getPublicDatabases() {
-        return publicDatabases;
+        return commonsTemplate.findDistinct(new Query(Criteria.where(Database.FIELDNAME_PUBLIC).is(true)), "_id", Database.class, String.class);
     }
 
     static public void dropAllTempColls(String token) {
@@ -533,7 +712,7 @@ public class MongoTemplateManager implements ApplicationContextAware {
      * @return true, if is module public
      */
     static public boolean isModulePublic(String sModule) {
-        return publicDatabases.contains(sModule);
+    	return commonsTemplate.findById(sModule, Database.class).isPublic();
     }
 
     /**
@@ -543,7 +722,7 @@ public class MongoTemplateManager implements ApplicationContextAware {
      * @return true, if is module hidden
      */
     static public boolean isModuleHidden(String sModule) {
-        return hiddenDatabases.contains(sModule);
+    	return commonsTemplate.findById(sModule, Database.class).isHidden();
     }
 
 //	public void saveRunsIntoProjectRecords()
@@ -581,60 +760,38 @@ public class MongoTemplateManager implements ApplicationContextAware {
         return clazz.getSimpleName();
     }
 
-	public static void setTaxon(String database, String taxon) {
-		taxonMap.put(database, taxon);
-	}
+//	public static void setTaxon(String database, String taxon) {
+//		taxonMap.put(database, taxon);
+//	}
+//	
+//	public static Integer getTaxonId(String database) {
+//		return commonsTemplate.findById(database, Database.class).getTaxid();
+//	}
+//	
+//	public static String getTaxonName(String database) {
+//		return commonsTemplate.findById(database, Database.class).getTaxon();
+//	}
+//	
+//	public static String getSpecies(String database) {
+//		return commonsTemplate.findById(database, Database.class).getSpecies();
+//	}
 	
-	public static Integer getTaxonId(String database) {
-		String taxon = taxonMap.get(database);
-		if (taxon == null)
-			return null;
-		String[] splitTaxonDetails = taxon.split(":");
-		if (splitTaxonDetails.length < 1)
-			return null;
-		
-		try {
-			return Integer.parseInt(splitTaxonDetails[0]);
-		}
-		catch (NumberFormatException ignored) {
-			return null;
-		}
+    public static MongoTemplate getCommonsTemplate() {
+		return commonsTemplate;
 	}
-	
-	public static String getTaxonName(String database) {
-		String taxon = taxonMap.get(database);
-		if (taxon == null)
-			return null;
-		String[] splitTaxonDetails = taxon.split(":");
-		if (splitTaxonDetails.length < 2)
-			return null;
 
-		String taxonName = splitTaxonDetails[1].isEmpty() && splitTaxonDetails.length > 2 ? splitTaxonDetails[2] : splitTaxonDetails[1];
-		return "".equals(taxonName) ? null : taxonName;
-	}
-	
-	public static String getSpecies(String database) {
-		String taxon = taxonMap.get(database);
-		if (taxon == null)
-			return null;
-		String[] splitTaxonDetails = taxon.split(":");
-		if (splitTaxonDetails.length < 3)
-			return null;
-		
-		return splitTaxonDetails.length > 2 ? splitTaxonDetails[2] : null;
-	}
-	
     public static String getModuleHost(String sModule) {
-        Enumeration<String> bundleKeys = dataSourceBundle.getKeys();
-        while (bundleKeys.hasMoreElements()) {
-            String key = bundleKeys.nextElement();
-            
-            if (sModule.equals(key.replaceAll("\\*", ""))) {
-            	String[] datasourceInfo = dataSourceBundle.getString(key).split(",");
-            	return datasourceInfo[0];
-            }
-        }
-        return null;
+    	return commonsTemplate.findById(sModule, Database.class).getHost();
+//        Enumeration<String> bundleKeys = dataSourceBundle.getKeys();
+//        while (bundleKeys.hasMoreElements()) {
+//            String key = bundleKeys.nextElement();
+//            
+//            if (sModule.equals(key.replaceAll("\\*", ""))) {
+//            	String[] datasourceInfo = dataSourceBundle.getString(key).split(",");
+//            	return datasourceInfo[0];
+//            }
+//        }
+//        return null;
     }
     
     public static boolean isModuleOnLocalHost(String sModule) {
@@ -644,4 +801,18 @@ public class MongoTemplateManager implements ApplicationContextAware {
     			return false;
     	return true;
     }
+    
+//    public static void main(String[] args) throws IOException {
+//    	TabixIndexCreator tbi = new TabixIndexCreator(TabixFormat.VCF);
+//    	tbi.addFeature(new VariantContextBuilder("Unknown", "chr8", 1500, 1502, Arrays.asList(Allele.create("AAC", true), Allele.create("G", false))).make(), 1);
+//    	tbi.addFeature(new VariantContextBuilder("Unknown", "chr8", 1600, 1600, Arrays.asList(Allele.create("T", true), Allele.create("A", false))).make(), 2);
+//    	tbi.addFeature(new VariantContextBuilder("Unknown", "chr8", 1700, 1702, Arrays.asList(Allele.create("GAT", true), Allele.create("TT", false))).make(), 3);
+//    	tbi.addFeature(new VariantContextBuilder("Unknown", "chr9", 500, 502, Arrays.asList(Allele.create("AAC", true), Allele.create("G", false))).make(), 4);
+//    	tbi.addFeature(new VariantContextBuilder("Unknown", "chr9", 600, 600, Arrays.asList(Allele.create("T", true), Allele.create("A", false))).make(), 5);
+//    	tbi.addFeature(new VariantContextBuilder("Unknown", "chr6", 2600, 2600, Arrays.asList(Allele.create("G", true), Allele.create("C", false))).make(), 6);
+//    	Index t = tbi.finalizeIndex(7);
+//    	t.write(new File("/home/sempere/Bureau/projects/gigwa/test.tbi"));
+//    	System.err.println(t);
+//    	System.err.println("done");
+//    }
 }

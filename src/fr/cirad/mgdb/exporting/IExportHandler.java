@@ -22,7 +22,6 @@ import org.bson.Document;
 
 import com.mongodb.client.model.Collation;
 
-import fr.cirad.mgdb.model.mongo.maintypes.VariantData;
 import fr.cirad.mgdb.model.mongo.subtypes.AbstractVariantData;
 import fr.cirad.mgdb.model.mongo.subtypes.ReferencePosition;
 
@@ -31,8 +30,6 @@ import fr.cirad.mgdb.model.mongo.subtypes.ReferencePosition;
  */
 public interface IExportHandler
 {
-	static final Document projectionDoc = new Document(VariantData.FIELDNAME_REFERENCE_POSITION + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(VariantData.FIELDNAME_REFERENCE_POSITION + "." + ReferencePosition.FIELDNAME_START_SITE, 1);	
-	static final Document sortDoc = new Document(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + "." + ReferencePosition.FIELDNAME_START_SITE, 1);
 	static final Collation collationObj = Collation.builder().numericOrdering(true).locale("en_US").build();
     
 	/** The Constant nMaxChunkSizeInMb. */
@@ -40,7 +37,7 @@ public interface IExportHandler
 	
 	/** The Constant LINE_SEPARATOR. */
 	static final String LINE_SEPARATOR = "\n";
-	
+
 	/**
 	 * Gets the export format name.
 	 *

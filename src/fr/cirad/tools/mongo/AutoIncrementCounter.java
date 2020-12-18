@@ -14,7 +14,7 @@
  * See <http://www.gnu.org/licenses/agpl.html> for details about GNU General
  * Public License V3.
  *******************************************************************************/
-package fr.cirad.mgdb.model.mongo.maintypes;
+package fr.cirad.tools.mongo;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.TypeAlias;
@@ -87,5 +87,17 @@ public class AutoIncrementCounter
 		counter = new AutoIncrementCounter(collectionName, 1);
 		mongo.save(counter);
 		return 1;
+	}
+	
+	/**
+	 * Gets the next sequence.
+	 *
+	 * @param mongo the mongo
+	 * @param documentClass the dcoument class
+	 * @return the next sequence
+	 */
+	static synchronized public int getNextSequence(MongoOperations mongo, Class documentClass)
+	{
+		return getNextSequence(mongo, MongoTemplateManager.getMongoCollectionName(documentClass));
 	}
 }

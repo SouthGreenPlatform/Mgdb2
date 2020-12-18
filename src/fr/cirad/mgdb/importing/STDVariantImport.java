@@ -23,6 +23,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -44,7 +45,7 @@ import org.springframework.data.mongodb.core.query.Update;
 import com.mongodb.BasicDBObject;
 
 import fr.cirad.mgdb.importing.base.AbstractGenotypeImport;
-import fr.cirad.mgdb.model.mongo.maintypes.AutoIncrementCounter;
+import fr.cirad.mgdb.model.mongo.maintypes.Assembly;
 import fr.cirad.mgdb.model.mongo.maintypes.GenotypingProject;
 import fr.cirad.mgdb.model.mongo.maintypes.GenotypingSample;
 import fr.cirad.mgdb.model.mongo.maintypes.Individual;
@@ -55,6 +56,7 @@ import fr.cirad.mgdb.model.mongo.subtypes.SampleGenotype;
 import fr.cirad.mgdb.model.mongodao.MgdbDao;
 import fr.cirad.tools.ExternalSort;
 import fr.cirad.tools.ProgressIndicator;
+import fr.cirad.tools.mongo.AutoIncrementCounter;
 import fr.cirad.tools.mongo.MongoTemplateManager;
 import htsjdk.variant.variantcontext.VariantContext.Type;
 
@@ -87,8 +89,8 @@ public class STDVariantImport extends AbstractGenotypeImport {
 	
 	public static void main(String[] args) throws Exception
 	{
-		if (args.length < 5)
-			throw new Exception("You must pass 5 parameters as arguments: DATASOURCE name, PROJECT name, RUN name, TECHNOLOGY string, GENOTYPE file! An optional 6th parameter supports values '1' (empty project data before importing) and '2' (empty entire database before importing, including marker list).");
+		if (args.length < 6)
+			throw new Exception("You must pass 6 parameters as arguments: DATASOURCE name, PROJECT name, RUN name, TECHNOLOGY string, GENOTYPE file, assembly name! An optional 7th parameter supports values '1' (empty project data before importing) and '2' (empty entire database before importing, including marker list).");
 
 		File mainFile = new File(args[4]);
 		if (!mainFile.exists() || mainFile.length() == 0)
@@ -97,16 +99,16 @@ public class STDVariantImport extends AbstractGenotypeImport {
 		int mode = 0;
 		try
 		{
-			mode = Integer.parseInt(args[5]);
+			mode = Integer.parseInt(args[6]);
 		}
 		catch (Exception e)
 		{
 			LOG.warn("Unable to parse input mode. Using default (0): overwrite run if exists.");
 		}
-		new STDVariantImport().importToMongo(args[0], args[1], args[2], args[3], args[4], mode);
+		new STDVariantImport().importToMongo(args[0], args[1], args[2], args[3], args[4], args[5], mode);
 	}
 	
-	public void importToMongo(String sModule, String sProject, String sRun, String sTechnology, String mainFilePath, int importMode) throws Exception
+	public void importToMongo(String sModule, String sProject, String sRun, String sTechnology, String mainFilePath, String assemblyName, int importMode) throws Exception
 	{
 		long before = System.currentTimeMillis();
 		ProgressIndicator progress = ProgressIndicator.get(m_processID);
@@ -130,6 +132,10 @@ public class STDVariantImport extends AbstractGenotypeImport {
 					throw new Exception("DATASOURCE '" + sModule + "' is not supported!");
 			}
 			
+			Assembly assembly = mongoTemplate.findOne(new Query(Criteria.where(Assembly.FIELDNAME_NAME).is(assemblyName)), Assembly.class);
+			if (assembly == null)
+				throw new Exception("Assembly \"" + assemblyName + "\" not found in database. Supported assemblies are " + StringUtils.join(mongoTemplate.findDistinct(Assembly.FIELDNAME_NAME, Assembly.class, String.class), ", "));
+
 			mongoTemplate.getDb().runCommand(new BasicDBObject("profile", 0));	// disable profiling
 			GenotypingProject project = mongoTemplate.findOne(new Query(Criteria.where(GenotypingProject.FIELDNAME_NAME).is(sProject)), GenotypingProject.class);
             if (importMode == 0 && project != null && project.getPloidyLevel() > 0 && project.getPloidyLevel() != m_ploidy)
@@ -144,7 +150,7 @@ public class STDVariantImport extends AbstractGenotypeImport {
 			
 			File genotypeFile = new File(mainFilePath);
 	
-            HashMap<String, String> existingVariantIDs = buildSynonymToIdMapForExistingVariants(mongoTemplate, m_fTryAndMatchRandomObjectIDs);
+            HashMap<String, String> existingVariantIDs = buildSynonymToIdMapForExistingVariants(mongoTemplate, m_fTryAndMatchRandomObjectIDs, assembly.getId());
 						
 			progress.addStep("Checking genotype consistency");
 			progress.moveToNextStep();
@@ -214,7 +220,8 @@ public class STDVariantImport extends AbstractGenotypeImport {
 			String sPreviousVariant = null, sVariantName = null;
 			ArrayList<String> linesForVariant = new ArrayList<String>(), unsavedVariants = new ArrayList<String>();
 			TreeMap<String /* individual name */, GenotypingSample> previouslyCreatedSamples = new TreeMap<>();	// will auto-magically remove all duplicates, and sort data, cool eh?
-			TreeSet<String> affectedSequences = new TreeSet<String>();	// will contain all sequences containing variants for which we are going to add genotypes 
+			Map<Integer, TreeSet<String>> affectedSequencesByAssembly = new HashMap<>();	// will contain all sequences containing variants for which we are going to add genotypes
+			Collection<Assembly> assemblies = mongoTemplate.findAll(Assembly.class);
 			do
 			{
 				if (sLine.length() > 0)
@@ -226,12 +233,12 @@ public class STDVariantImport extends AbstractGenotypeImport {
 					{
 						if (sPreviousVariant != null)
 						{	// save variant
-							String mgdbVariantId = existingVariantIDs.get(sPreviousVariant.toUpperCase());
-							if (mgdbVariantId == null && !fImportUnknownVariants)
-								LOG.warn("Skipping unknown variant: " + mgdbVariantId);
-							else if (mgdbVariantId != null && mgdbVariantId.toString().startsWith("*"))
+							String sMgdbVariantId = existingVariantIDs.get(sPreviousVariant.toUpperCase());
+							if (sMgdbVariantId == null && !fImportUnknownVariants)
+								LOG.warn("Skipping unknown variant: " + sMgdbVariantId);
+							else if (sMgdbVariantId != null && sMgdbVariantId.toString().startsWith("*"))
 								LOG.warn("Skipping deprecated variant data: " + sPreviousVariant);
-							else if (saveWithOptimisticLock(mongoTemplate, project, sRun, mgdbVariantId != null ? mgdbVariantId : sPreviousVariant, individualPopulations, inconsistencies, linesForVariant, 3, previouslyCreatedSamples, affectedSequences))
+							else if (saveWithOptimisticLock(mongoTemplate, project, sRun, sMgdbVariantId != null ? sMgdbVariantId : sPreviousVariant, individualPopulations, inconsistencies, linesForVariant, 3, previouslyCreatedSamples, affectedSequencesByAssembly))
 								nVariantSaveCount++;
 							else
 								unsavedVariants.add(sVariantName);
@@ -251,12 +258,12 @@ public class STDVariantImport extends AbstractGenotypeImport {
 			}
 			while (sLine != null);		
 
-			String mgdbVariantId = existingVariantIDs.get(sVariantName.toUpperCase());	// when saving the last variant there is not difference between sVariantName and sPreviousVariant
-			if (mgdbVariantId == null && !fImportUnknownVariants)
-				LOG.warn("Skipping unknown variant: " + mgdbVariantId);
-			else if (mgdbVariantId != null && mgdbVariantId.toString().startsWith("*"))
+			String sMgdbVariantId = existingVariantIDs.get(sVariantName.toUpperCase());	// when saving the last variant there is not difference between sVariantName and sPreviousVariant
+			if (sMgdbVariantId == null && !fImportUnknownVariants)
+				LOG.warn("Skipping unknown variant: " + sMgdbVariantId);
+			else if (sMgdbVariantId != null && sMgdbVariantId.toString().startsWith("*"))
 				LOG.warn("Skipping deprecated variant data: " + sPreviousVariant);
-			else if (saveWithOptimisticLock(mongoTemplate, project, sRun, mgdbVariantId != null ? mgdbVariantId : sPreviousVariant, individualPopulations, inconsistencies, linesForVariant, 3, previouslyCreatedSamples, affectedSequences))
+			else if (saveWithOptimisticLock(mongoTemplate, project, sRun, sMgdbVariantId != null ? sMgdbVariantId : sPreviousVariant, individualPopulations, inconsistencies, linesForVariant, 3, previouslyCreatedSamples, affectedSequencesByAssembly))
 				nVariantSaveCount++;
 			else
 				unsavedVariants.add(sVariantName);
@@ -268,7 +275,9 @@ public class STDVariantImport extends AbstractGenotypeImport {
             if (!project.getVariantTypes().contains(Type.SNP.toString())) {
                 project.getVariantTypes().add(Type.SNP.toString());
             }
-            project.getSequences().addAll(affectedSequences);
+            
+            for (Assembly anAssembly : assemblies)
+            	project.getSequences(anAssembly.getId()).addAll(affectedSequencesByAssembly.get(anAssembly.getId()));
             if (!project.getRuns().contains(sRun))
                 project.getRuns().add(sRun);
             if (project.getPloidyLevel() == 0)
@@ -292,37 +301,43 @@ public class STDVariantImport extends AbstractGenotypeImport {
 		}
 	}
 	
-	private boolean saveWithOptimisticLock(MongoTemplate mongoTemplate, GenotypingProject project, String runName, String mgdbVariantId, HashMap<String, String> individualPopulations, HashMap<String, ArrayList<String>> inconsistencies, ArrayList<String> linesForVariant, int nNumberOfRetries, Map<String, GenotypingSample> usedSamples, TreeSet<String> affectedSequences) throws Exception
+	private boolean saveWithOptimisticLock(MongoTemplate mongoTemplate, GenotypingProject project, String runName, String sMgdbVariantId, HashMap<String, String> individualPopulations, HashMap<String, ArrayList<String>> inconsistencies, ArrayList<String> linesForVariant, int nNumberOfRetries, Map<String, GenotypingSample> usedSamples, Map<Integer, TreeSet<String>> affectedSequencesByAssembly) throws Exception
 	{
 		if (linesForVariant.size() == 0)
 			return false;
 		
 		for (int j=0; j<Math.max(1, nNumberOfRetries); j++)
 		{			
-			Query query = new Query(Criteria.where("_id").is(mgdbVariantId));
+			Query query = new Query(Criteria.where("_id").is(sMgdbVariantId));
 			query.fields().include(VariantData.FIELDNAME_REFERENCE_POSITION).include(VariantData.FIELDNAME_KNOWN_ALLELE_LIST).include(VariantData.FIELDNAME_PROJECT_DATA + "." + project.getId()).include(VariantData.FIELDNAME_VERSION);
 			
 			VariantData variant = mongoTemplate.findOne(query, VariantData.class);
 			Update update = variant == null ? null : new Update();
 			if (update == null)
 			{	// it's the first time we deal with this variant
-				variant = new VariantData((ObjectId.isValid(mgdbVariantId) ? "_" : "") + mgdbVariantId);
+				variant = new VariantData((ObjectId.isValid(sMgdbVariantId) ? "_" : "") + sMgdbVariantId);
 				variant.setType(Type.SNP.toString());
 			}
 			else
-			{
-				ReferencePosition rp = variant.getReferencePosition();
-				if (rp != null)
-					affectedSequences.add(rp.getSequence());
-			}
+				for (Integer assemblyId : variant.getReferencePositions().keySet()) {
+					ReferencePosition rp = variant.getReferencePositions().get(assemblyId);
+					if (rp != null) {
+						TreeSet<String> affectedSequencesForAssembly = affectedSequencesByAssembly.get(assemblyId);
+						if (affectedSequencesForAssembly == null) {
+							affectedSequencesForAssembly = new TreeSet<>();
+							affectedSequencesByAssembly.put(assemblyId, affectedSequencesForAssembly);
+						}
+						affectedSequencesForAssembly.add(rp.getSequence());
+					}
+				}
 			
 			String sVariantName = linesForVariant.get(0).trim().split(" ")[2];
-//			if (!mgdbVariantId.equals(sVariantName))
-//				variant.setSynonyms(markerSynonymMap.get(mgdbVariantId));	// provided id was a synonym
+//			if (!sMgdbVariantId.equals(sVariantName))
+//				variant.setSynonyms(markerSynonymMap.get(sMgdbVariantId));	// provided id was a synonym
 			
-			VariantRunData run = new VariantRunData(new VariantRunData.VariantRunDataId(project.getId(), runName, mgdbVariantId));
+			VariantRunData run = new VariantRunData(new VariantRunData.VariantRunDataId(project.getId(), runName, sMgdbVariantId));
 			
-			ArrayList<String> inconsistentIndividuals = inconsistencies.get(mgdbVariantId);
+			ArrayList<String> inconsistentIndividuals = inconsistencies.get(sMgdbVariantId);
 			for (String individualLine : linesForVariant)
 			{				
 				String[] cells = individualLine.trim().split(" ");
@@ -380,8 +395,9 @@ public class STDVariantImport extends AbstractGenotypeImport {
 				if (gtCode == null)
 					continue;	// we don't add missing genotypes
 				
-				SampleGenotype genotype = new SampleGenotype(gtCode);
-				run.getSampleGenotypes().put(usedSamples.get(sIndividual).getId(), genotype);
+//				SampleGenotype genotype = new SampleGenotype(gtCode);
+//				run.getSampleGenotypes().put(usedSamples.get(sIndividual).getId(), genotype);
+				run.setSampleGenotype(usedSamples.get(sIndividual).getId(), gtCode);
 			}
             project.getAlleleCounts().add(variant.getKnownAlleleList().size());	// it's a TreeSet so it will only be added if it's not already present
 			
@@ -395,11 +411,11 @@ public class STDVariantImport extends AbstractGenotypeImport {
 				else if (!update.getUpdateObject().keySet().isEmpty())
 				{
 //					update.set(VariantData.FIELDNAME_PROJECT_DATA + "." + project.getId(), projectData);
-					mongoTemplate.upsert(new Query(Criteria.where("_id").is(mgdbVariantId)).addCriteria(Criteria.where(VariantData.FIELDNAME_VERSION).is(variant.getVersion())), update, VariantData.class);
+					mongoTemplate.upsert(new Query(Criteria.where("_id").is(sMgdbVariantId)).addCriteria(Criteria.where(VariantData.FIELDNAME_VERSION).is(variant.getVersion())), update, VariantData.class);
 //					System.out.println("updated: " + variant.getId());
 				}
 		        run.setKnownAlleleList(variant.getKnownAlleleList());
-		        run.setReferencePosition(variant.getReferencePosition());
+		        run.setReferencePositions(variant.getReferencePositions());
 		        run.setType(Type.SNP.toString());
 				mongoTemplate.save(run);
 

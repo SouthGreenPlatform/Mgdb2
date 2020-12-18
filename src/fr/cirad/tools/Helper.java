@@ -31,7 +31,9 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import org.bson.Document;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.mapping.Field;
 
+import fr.cirad.mgdb.model.mongo.maintypes.Database;
 import fr.cirad.tools.mongo.MongoTemplateManager;
 
 /**
@@ -268,9 +270,10 @@ public class Helper {
      * @param doc the record
      * @param fieldPath the field path
      * @param listFieldSeparator separator to use for list fields
+     * @param objectToReturnInsteadOfNull to be returned if targeted field contains a null value or doesn't exist
      * @return the object
      */
-    public static Object readPossiblyNestedField(Document doc, String fieldPath, String listFieldSeparator) {
+    public static Object readPossiblyNestedField(Document doc, String fieldPath, String listFieldSeparator, Object objectToReturnInsteadOfNull) {
     	Document slidingRecord = doc;
         String[] splitFieldName = fieldPath.split("\\.");
         Object o = null, result;
@@ -294,9 +297,8 @@ public class Helper {
             result = o;
         }
 
-        if (result == null) {
-            result = "";
-        }
+        if (result == null)
+            return objectToReturnInsteadOfNull;
 
         return result;
     }
@@ -334,6 +336,16 @@ public class Helper {
     
     public static long estimDocCount(String sModule, Class documentClass) {
     	return estimDocCount(MongoTemplateManager.get(sModule), documentClass);
+    }
+    
+    public static HashMap<String, String> getDocFieldNamesFromFieldAnnotationValues(Collection<String> annotationValues) {
+    	HashMap<String, String> result = new HashMap<>();
+		for (java.lang.reflect.Field field : Database.class.getDeclaredFields()) {
+			Field fieldAnnotation = field.getAnnotation(Field.class);
+			if (fieldAnnotation != null && annotationValues.contains(fieldAnnotation.value()))
+				result.put(field.getName(), field.getType().getSimpleName());
+		}
+		return result;
     }
 
 }
