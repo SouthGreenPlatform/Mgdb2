@@ -337,11 +337,11 @@ public class Helper {
     public static long estimDocCount(String sModule, Class documentClass) {
     	return estimDocCount(MongoTemplateManager.get(sModule), documentClass);
     }
-    
-    public static HashMap<String, String> getDocFieldNamesFromFieldAnnotationValues(Collection<String> annotationValues) {
+
+    public static HashMap<String, String> getDocFieldNamesFromFieldAnnotationValues(Class clazz, Collection<String> annotationValues) {
     	HashMap<String, String> result = new HashMap<>();
-		for (java.lang.reflect.Field field : Database.class.getDeclaredFields()) {
-			Field fieldAnnotation = field.getAnnotation(Field.class);
+		for (java.lang.reflect.Field field : clazz.getDeclaredFields()) {
+			org.springframework.data.mongodb.core.mapping.Field fieldAnnotation = field.getAnnotation(org.springframework.data.mongodb.core.mapping.Field.class);
 			if (fieldAnnotation != null && annotationValues.contains(fieldAnnotation.value()))
 				result.put(field.getName(), field.getType().getSimpleName());
 		}
