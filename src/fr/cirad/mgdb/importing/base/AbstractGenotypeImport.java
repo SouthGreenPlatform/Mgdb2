@@ -243,7 +243,7 @@ public class AbstractGenotypeImport {
                     List<Criteria> crits = new ArrayList<>();
                     crits.add(Criteria.where("_id." + VariantRunData.VariantRunDataId.FIELDNAME_PROJECT_ID).is(project.getId()));
                     crits.add(Criteria.where("_id." + VariantRunData.VariantRunDataId.FIELDNAME_RUNNAME).is(sRun));
-                    crits.add(Criteria.where(VariantRunData.FIELDNAME_SAMPLEGENOTYPES).exists(true));
+                    crits.add(Criteria.where(VariantRunData.FIELDNAME_GENOTYPES).exists(true));
                     dr = mongoTemplate.remove(new Query(new Criteria().andOperator(crits.toArray(new Criteria[crits.size()]))), VariantRunData.class);
                     if (dr.getDeletedCount() > 0)
                     	LOG.info(dr.getDeletedCount() + " variantRunData records removed while cleaning up project " + project.getId() + "'s data");

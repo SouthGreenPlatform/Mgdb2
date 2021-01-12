@@ -21,7 +21,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.TreeSet;
 
 import org.springframework.data.annotation.Id;
@@ -36,7 +35,7 @@ import fr.cirad.tools.AlphaNumericComparator;
  */
 @Document(collection = "projects")
 @TypeAlias("GP")
-public class GenotypingProject {
+public class GenotypingProjectV2 {
     /**
      * The Constant FIELDNAME_NAME.
      */
@@ -165,8 +164,8 @@ public class GenotypingProject {
     /**
      * The sequences.
      */
-    @Field(FIELDNAME_SEQUENCES)	/*TODO: not backwards compatible*/
-    private Map<Integer, TreeSet<String>> sequences = new HashMap<>();
+    @Field(FIELDNAME_SEQUENCES)
+    private TreeSet<String> sequences = new TreeSet<String>(new AlphaNumericComparator());
 
     /**
      * The allele counts.
@@ -191,7 +190,7 @@ public class GenotypingProject {
      *
      * @param id the id
      */
-    public GenotypingProject(int id) {
+    public GenotypingProjectV2(int id) {
         super();
         this.id = id;
     }
@@ -362,26 +361,12 @@ public class GenotypingProject {
     }
 
     /**
-     * Gets the sequences by assembly ID.
+     * Gets the sequences.
      *
-     * @return the sequences by assembly ID
+     * @return the sequences
      */
-    public Map<Integer, TreeSet<String>> getSequencesByAssembly() {
+    public TreeSet<String> getSequences() {
         return sequences;
-    }
-
-    /**
-     * Gets the sequences for a given assembly ID.
-     *
-     * @return the sequences for a given assembly ID
-     */
-    public TreeSet<String> getSequences(int nAssemblyId) {
-    	TreeSet<String> seqs = sequences.get(nAssemblyId);
-    	if (seqs == null) {
-    		seqs = new TreeSet<String>(new AlphaNumericComparator());
-    		sequences.put(nAssemblyId, seqs);
-    	}
-        return seqs;
     }
     
     /**
@@ -426,7 +411,7 @@ public class GenotypingProject {
 		getAlleleCounts().clear();
 		getEffectAnnotations().clear();
 		getVariantTypes().clear();
-		getSequencesByAssembly().clear();
+		getSequences().clear();
 		setPloidyLevel(0);
 		getAdditionalInfo().clear();
     }

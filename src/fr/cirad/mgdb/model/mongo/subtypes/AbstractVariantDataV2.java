@@ -16,10 +16,21 @@
  *******************************************************************************/
 package fr.cirad.mgdb.model.mongo.subtypes;
 
+import htsjdk.variant.variantcontext.Allele;
+import htsjdk.variant.variantcontext.Genotype;
+import htsjdk.variant.variantcontext.GenotypeBuilder;
+import htsjdk.variant.variantcontext.GenotypeLikelihoods;
+import htsjdk.variant.variantcontext.VariantContext;
+import htsjdk.variant.variantcontext.VariantContextBuilder;
+import htsjdk.variant.variantcontext.VariantContext.Type;
+import htsjdk.variant.vcf.VCFConstants;
+
+import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -29,34 +40,30 @@ import java.util.stream.Collectors;
 import org.bson.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
+import fr.cirad.mgdb.model.mongo.maintypes.GenotypingSample;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantData;
+import fr.cirad.mgdb.model.mongo.maintypes.VariantRunData;
 import fr.cirad.tools.Helper;
-import htsjdk.variant.variantcontext.Allele;
-import htsjdk.variant.variantcontext.VariantContext.Type;
 
-abstract public class AbstractVariantData {
+abstract public class AbstractVariantDataV2
+{	
 	/** The Constant FIELDNAME_ANALYSIS_METHODS. */
-	public final static String FIELDNAME_ANALYSIS_METHODS = "m";
-	public final static String FIELDNAME_ANALYSIS_METHODS_V2 = "am";
+	public final static String FIELDNAME_ANALYSIS_METHODS = "am";
 	
 	/** The Constant FIELDNAME_SYNONYMS. */
-	public final static String FIELDNAME_SYNONYMS = "s";
-	public final static String FIELDNAME_SYNONYMS_V2 = "sy";
+	public final static String FIELDNAME_SYNONYMS = "sy";
 	
 	/** The Constant FIELDNAME_KNOWN_ALLELE_LIST. */
-	public final static String FIELDNAME_KNOWN_ALLELE_LIST = "a";
-	public final static String FIELDNAME_KNOWN_ALLELE_LIST_V2 = "ka";
+	public final static String FIELDNAME_KNOWN_ALLELE_LIST = "ka";
 	
 	/** The Constant FIELDNAME_TYPE. */
-	public final static String FIELDNAME_TYPE = "t";
-	public final static String FIELDNAME_TYPE_V2 = "ty";
+	public final static String FIELDNAME_TYPE = "ty";
 	
 	/** The Constant FIELDNAME_REFERENCE_POSITION. */
-	public final static String FIELDNAME_REFERENCE_POSITION = "p";
-	public final static String FIELDNAME_REFERENCE_POSITION_V2 = "rp";
+	public final static String FIELDNAME_REFERENCE_POSITION = "rp";
 	
-//	/** The Constant FIELDNAME_PROJECT_DATA. */
-//	public final static String FIELDNAME_PROJECT_DATA = "pj";
+	/** The Constant FIELDNAME_PROJECT_DATA. */
+	public final static String FIELDNAME_PROJECT_DATA = "pj";
 	
 	/** The Constant FIELDNAME_SYNONYM_TYPE_ID_ILLUMINA. */
 	public final static String FIELDNAME_SYNONYM_TYPE_ID_ILLUMINA = "il";
@@ -68,43 +75,40 @@ abstract public class AbstractVariantData {
 	public final static String FIELDNAME_SYNONYM_TYPE_ID_INTERNAL = "in";
 	
 	/** The Constant SECTION_ADDITIONAL_INFO. */
-	public final static String SECTION_ADDITIONAL_INFO = "i";
-	public final static String SECTION_ADDITIONAL_INFO_V2 = "ai";
+	public final static String SECTION_ADDITIONAL_INFO = "ai";
 
-	/** The Constant FIELD_PHREDSCALEDQUAL, expected to be found in VCF files */
+	/** The Constant FIELD_PHREDSCALEDQUAL. */
 	public static final String FIELD_PHREDSCALEDQUAL = "qual";
 	
-	/** The Constant FIELD_SOURCE, expected to be found in VCF files */
+	/** The Constant FIELD_SOURCE. */
 	public static final String FIELD_SOURCE = "name";
 	
-	/** The Constant FIELD_FILTERS, expected to be found in VCF files */
+	/** The Constant FIELD_FILTERS. */
 	public static final String FIELD_FILTERS = "filt";
 	
-	/** The Constant FIELD_FULLYDECODED, expected to be found in VCF files */
+	/** The Constant FIELD_FULLYDECODED. */
 	public static final String FIELD_FULLYDECODED = "fullDecod";
 	
-	/** The Constant FIELDVAL_SOURCE_MISSING, expected to be found in VCF files. */
+	/** The Constant FIELDVAL_SOURCE_MISSING. */
 	public static final String FIELDVAL_SOURCE_MISSING = "Unknown";
 	
-	/** The Constant GT_FIELD_GQ, expected to be found in VCF files */
+	/** The Constant GT_FIELD_GQ. */
 	public static final String GT_FIELD_GQ = "GQ";
 	
-	/** The Constant GT_FIELD_DP, expected to be found in VCF files */
+	/** The Constant GT_FIELD_DP. */
 	public static final String GT_FIELD_DP = "DP";
 	
-	/** The Constant GT_FIELD_AD, expected to be found in VCF files */
+	/** The Constant GT_FIELD_AD. */
 	public static final String GT_FIELD_AD = "AD";
 	
-	/** The Constant GT_FIELD_PL, expected to be found in VCF files */
+	/** The Constant GT_FIELD_PL. */
 	public static final String GT_FIELD_PL = "PL";
 	
 	/** The Constant GT_FIELD_PHASED_GT. */
-	public static final String GT_FIELD_PHASED_GT = "G";
-	public static final String GT_FIELD_PHASED_GT_V2 = "phGT";
+	public static final String GT_FIELD_PHASED_GT = "phGT";
 	
 	/** The Constant GT_FIELD_PHASED_ID. */
-	public static final String GT_FIELD_PHASED_ID = "I";
-	public static final String GT_FIELD_PHASED_ID_V2 = "phID";
+	public static final String GT_FIELD_PHASED_ID = "phID";
 
 	/** The Constant GT_FIELDVAL_AL_MISSING. */
 	public static final String GT_FIELDVAL_AL_MISSING = ".";
@@ -121,7 +125,7 @@ abstract public class AbstractVariantData {
 
 	/** The reference position. */
 	@Field(FIELDNAME_REFERENCE_POSITION)
-	protected Map<Integer, ReferencePosition> referencePositions = new HashMap<>();
+	Map<Integer, ReferencePosition> referencePositions = new HashMap<>();
 	
 	/** The synonyms. */
 	@Field(FIELDNAME_SYNONYMS)
@@ -133,7 +137,7 @@ abstract public class AbstractVariantData {
 
 	/** The known allele list. */
 	@Field(FIELDNAME_KNOWN_ALLELE_LIST)
-	protected List<String> knownAlleleList;
+	private List<String> knownAlleleList;
 
 	/** The additional info. */
 	@Field(SECTION_ADDITIONAL_INFO)
@@ -547,9 +551,224 @@ abstract public class AbstractVariantData {
 
 		return result.length() > 0 ? result : null;
 	}
+		
+	/**
+	 * To variant context.
+	 *
+	 * @param runs the runs
+	 * @param nAssemblyId ID of the assembly to work with
+	 * @param exportVariantIDs the export variant ids
+	 * @param sampleToIndividualMap global sample to individual map
+	 * @param individuals1 individual IDs for group 1
+	 * @param individuals2 individual IDs for group 2
+	 * @param previousPhasingIds the previous phasing ids
+	 * @param annotationFieldThresholds1 the annotation field thresholds for group 1
+	 * @param annotationFieldThresholds2 the annotation field thresholds for group 2
+	 * @param warningFileWriter the warning file writer
+	 * @param synonym the synonym
+	 * @return the variant context
+	 * @throws Exception the exception
+	 */
+//	public VariantContext toVariantContext(Collection<VariantRunData> runs, int nAssemblyId, boolean exportVariantIDs, Collection<GenotypingSample> samplesToExport, Collection<String> individuals1, Collection<String> individuals2, HashMap<Integer, Object> previousPhasingIds, HashMap<String, Float> annotationFieldThresholds1, HashMap<String, Float> annotationFieldThresholds2, FileWriter warningFileWriter, Comparable synonym) throws Exception
+//	{
+//		ArrayList<Genotype> genotypes = new ArrayList<Genotype>();
+//		String sRefAllele = knownAlleleList.size() == 0 ? "" : knownAlleleList.get(0);
+//
+//		ArrayList<Allele> variantAlleles = new ArrayList<Allele>();
+//		variantAlleles.add(Allele.create(sRefAllele, true));
+//		
+//		// collect all genotypes for all individuals
+//		Map<String/*individual*/, HashMap<String/*genotype code*/, List<Integer>>> individualSamplesByGenotype = new LinkedHashMap<>();
+//		
+//		HashMap<Integer, SampleGenotype> sampleGenotypes = new HashMap<>();
+//		List<VariantRunData> runsWhereDataWasFound = new ArrayList<>();
+//		List<String> individualList = new ArrayList<>();
+//		for (GenotypingSample sample : samplesToExport)
+//		{
+//			if (runs == null || runs.size() == 0)
+//				continue;
+//			
+//			Integer sampleIndex = sample.getId();
+//			
+//			for (VariantRunData run : runs)
+//			{
+//				SampleGenotype sampleGenotype = run.getSampleGenotypes().get(sampleIndex);
+//				if (sampleGenotype == null)
+//					continue;	// run contains no data for this sample
+//				
+//				// keep track of SampleGenotype and Run so we can have access to additional info later on
+//				sampleGenotypes.put(sampleIndex, sampleGenotype);
+//				if (!runsWhereDataWasFound.contains(run))
+//					runsWhereDataWasFound.add(run);
+//				
+//				String gtCode = /*isPhased ? (String) sampleGenotype.getAdditionalInfo().get(GT_FIELD_PHASED_GT) : */sampleGenotype.getCode();
+//				String individualId = sample.getIndividual();
+//				if (!individualList.contains(individualId))
+//					individualList.add(individualId);
+//				HashMap<String, List<Integer>> storedIndividualGenotypes = individualSamplesByGenotype.get(individualId);
+//				if (storedIndividualGenotypes == null) {
+//					storedIndividualGenotypes = new HashMap<String, List<Integer>>();
+//					individualSamplesByGenotype.put(individualId, storedIndividualGenotypes);
+//				}
+//				List<Integer> samplesWithGivenGenotype = storedIndividualGenotypes.get(gtCode);
+//				if (samplesWithGivenGenotype == null)
+//				{
+//					samplesWithGivenGenotype = new ArrayList<Integer>();
+//					storedIndividualGenotypes.put(gtCode, samplesWithGivenGenotype);
+//				}
+//				samplesWithGivenGenotype.add(sampleIndex);
+//			}
+//		}
+//			
+//		individualLoop : for (String individualName : individualList)
+//		{
+//			HashMap<String, List<Integer>> samplesWithGivenGenotype = individualSamplesByGenotype.get(individualName);
+//			HashMap<Object, Integer> genotypeCounts = new HashMap<Object, Integer>(); // will help us to keep track of missing genotypes
+//				
+//			int highestGenotypeCount = 0;
+//			String mostFrequentGenotype = null;
+//			if (genotypes != null && samplesWithGivenGenotype != null)
+//				for (String gtCode : samplesWithGivenGenotype.keySet())
+//				{
+//					if (gtCode == null)
+//						continue; /* skip missing genotypes */
+//
+//					int gtCount = samplesWithGivenGenotype.get(gtCode).size();
+//					if (gtCount > highestGenotypeCount) {
+//						highestGenotypeCount = gtCount;
+//						mostFrequentGenotype = gtCode;
+//					}
+//					genotypeCounts.put(gtCode, gtCount);
+//				}
+//			
+//			if (mostFrequentGenotype == null)
+//				continue;	// no genotype for this individual
+//			
+//			if (warningFileWriter != null && genotypeCounts.size() > 1)
+//				warningFileWriter.write("- Dissimilar genotypes found for variant " + (synonym == null ? id : synonym) + ", individual " + individualName + ". Exporting most frequent: " + mostFrequentGenotype + "\n");
+//			
+//			Integer spId = samplesWithGivenGenotype.get(mostFrequentGenotype).get(0);	// any will do
+//			SampleGenotype sampleGenotype = sampleGenotypes.get(spId);
+//			
+//			Object currentPhId = sampleGenotype.getAdditionalInfo().get(GT_FIELD_PHASED_ID);
+//			
+//			boolean isPhased = currentPhId != null && currentPhId.equals(previousPhasingIds.get(spId));
+//
+//			List<String> alleles = /*mostFrequentGenotype == null ? new ArrayList<String>() :*/ getAllelesFromGenotypeCode(isPhased ? (String) sampleGenotype.getAdditionalInfo().get(GT_FIELD_PHASED_GT) : mostFrequentGenotype);
+//			ArrayList<Allele> individualAlleles = new ArrayList<Allele>();
+//			previousPhasingIds.put(spId, currentPhId == null ? id : currentPhId);
+//			if (alleles.size() == 0)
+//				continue;	/* skip this sample because there is no genotype for it */
+//			
+//			boolean fAllAllelesNoCall = true;
+//			for (String allele : alleles)
+//				if (allele.length() > 0)
+//				{
+//					fAllAllelesNoCall = false;
+//					break;
+//				}
+//			for (String sAllele : alleles)
+//			{
+//				Allele allele = Allele.create(sAllele.length() == 0 ? (fAllAllelesNoCall ? Allele.NO_CALL_STRING : "<DEL>") : sAllele, sRefAllele.equals(sAllele));
+//				if (!allele.isNoCall() && !variantAlleles.contains(allele))
+//					variantAlleles.add(allele);
+//				individualAlleles.add(allele);
+//			}
+//
+//			GenotypeBuilder gb = new GenotypeBuilder(individualName, individualAlleles);
+//			if (individualAlleles.size() > 0)
+//			{
+//				gb.phased(isPhased);
+//				String genotypeFilters = (String) sampleGenotype.getAdditionalInfo().get(FIELD_FILTERS);
+//				if (genotypeFilters != null && genotypeFilters.length() > 0)
+//					gb.filter(genotypeFilters);
+//								
+//				List<String> alleleListAtImportTimeIfDifferentFromNow = null;
+//				for (String key : sampleGenotype.getAdditionalInfo().keySet())
+//				{
+//					if (!gtPassesVcfAnnotationFilters(individualName, sampleGenotype, individuals1, annotationFieldThresholds1, individuals2, annotationFieldThresholds2))
+//						continue individualLoop;	// skip genotype
+//
+//					if (VCFConstants.GENOTYPE_ALLELE_DEPTHS.equals(key))
+//					{
+//						String ad = (String) sampleGenotype.getAdditionalInfo().get(key);
+//						if (ad != null)
+//						{
+//							int[] adArray = Helper.csvToIntArray(ad);
+//							if (knownAlleleList.size() > adArray.length)
+//							{
+//								alleleListAtImportTimeIfDifferentFromNow = knownAlleleList.subList(0, adArray.length);
+//								adArray = VariantData.fixAdFieldValue(adArray, alleleListAtImportTimeIfDifferentFromNow, knownAlleleList);
+//							}
+//							gb.AD(adArray);
+//						}
+//					}
+//					else if (VCFConstants.DEPTH_KEY.equals(key) || VCFConstants.GENOTYPE_QUALITY_KEY.equals(key))
+//					{
+//						Integer value = (Integer) sampleGenotype.getAdditionalInfo().get(key);
+//						if (value != null)
+//						{
+//							if (VCFConstants.DEPTH_KEY.equals(key))
+//								gb.DP(value);
+//							else
+//								gb.GQ(value);
+//						}
+//					}
+//					else if (VCFConstants.GENOTYPE_PL_KEY.equals(key) || VCFConstants.GENOTYPE_LIKELIHOODS_KEY.equals(key))
+//					{
+//						String fieldVal = (String) sampleGenotype.getAdditionalInfo().get(key);
+//						if (fieldVal != null)
+//						{
+//							int[] plArray = VCFConstants.GENOTYPE_PL_KEY.equals(key) ? Helper.csvToIntArray(fieldVal) : GenotypeLikelihoods.fromGLField(fieldVal).getAsPLs();
+//							if (alleleListAtImportTimeIfDifferentFromNow != null)
+//								plArray = VariantData.fixPlFieldValue(plArray, individualAlleles.size(), alleleListAtImportTimeIfDifferentFromNow, knownAlleleList);
+//							gb.PL(plArray);
+//						}
+//					}
+//					else if (!key.equals(VariantData.GT_FIELD_PHASED_GT) && !key.equals(VariantData.GT_FIELD_PHASED_ID) && !key.equals(VariantRunData.FIELDNAME_ADDITIONAL_INFO_EFFECT_GENE) && !key.equals(VariantRunData.FIELDNAME_ADDITIONAL_INFO_EFFECT_NAME)) // exclude some internally created fields that we don't want to export
+//						gb.attribute(key, sampleGenotype.getAdditionalInfo().get(key)); // looks like we have an extended attribute
+//				}					
+//			}
+//			genotypes.add(gb.make());
+//		}
+//
+//		VariantRunData run = runsWhereDataWasFound.size() == 1 ? runsWhereDataWasFound.get(0) : null;	// if there is not exactly one run involved then we do not export meta-data
+//		String source = run == null ? null : (String) run.getAdditionalInfo().get(FIELD_SOURCE);
+//
+//		ReferencePosition referencePosition = referencePositions.get(nAssemblyId);
+//		Long start = referencePosition == null ? null : referencePosition.getStartSite(), stop = referencePosition == null ? null : (referencePosition.getEndSite() == null ? start : referencePosition.getEndSite());
+//		String chr = referencePosition == null ? null : referencePosition.getSequence();
+//		VariantContextBuilder vcb = new VariantContextBuilder(source != null ? source : FIELDVAL_SOURCE_MISSING, chr != null ? chr : "", start != null ? start : 0, stop != null ? stop : 0, variantAlleles);
+//		if (exportVariantIDs)
+//			vcb.id((synonym == null ? id : synonym).toString());
+//		vcb.genotypes(genotypes);
+//		
+//		if (run != null)
+//		{
+//			Boolean fullDecod = (Boolean) run.getAdditionalInfo().get(FIELD_FULLYDECODED);
+//			vcb.fullyDecoded(fullDecod != null && fullDecod);
+//	
+//			String filters = (String) run.getAdditionalInfo().get(FIELD_FILTERS);
+//			if (filters != null)
+//				vcb.filters(filters.split(","));
+//			else
+//				vcb.filters(VCFConstants.UNFILTERED);
+//			
+//			Number qual = (Number) run.getAdditionalInfo().get(FIELD_PHREDSCALEDQUAL);
+//			if (qual != null)
+//				vcb.log10PError(qual.doubleValue() / -10.0D);
+//			
+//			List<String> alreadyTreatedAdditionalInfoFields = Arrays.asList(new String[] {FIELD_SOURCE, FIELD_FULLYDECODED, FIELD_FILTERS, FIELD_PHREDSCALEDQUAL});
+//			for (String attrName : run.getAdditionalInfo().keySet())
+//				if (!VariantRunData.FIELDNAME_ADDITIONAL_INFO_EFFECT_NAME.equals(attrName) && !VariantRunData.FIELDNAME_ADDITIONAL_INFO_EFFECT_GENE.equals(attrName) && !alreadyTreatedAdditionalInfoFields.contains(attrName))
+//					vcb.attribute(attrName, run.getAdditionalInfo().get(attrName));
+//		}
+//		VariantContext vc = vcb.make();
+//		return vc;
+//	}
 
 	// tells whether applied filters imply to treat this genotype as missing data
-    public static boolean gtPassesVcfAnnotationFilters(String individualName, int sampleId, HashMap<String, HashMap<Integer, Object>> metadata, Collection<String> individuals1, HashMap<String, Float> annotationFieldThresholds, Collection<String> individuals2, HashMap<String, Float> annotationFieldThresholds2)
+    public static boolean gtPassesVcfAnnotationFilters(String individualName, SampleGenotype sampleGenotype, Collection<String> individuals1, HashMap<String, Float> annotationFieldThresholds, Collection<String> individuals2, HashMap<String, Float> annotationFieldThresholds2)
     {
 		List<HashMap<String, Float>> thresholdsToCheck = new ArrayList<HashMap<String, Float>>();
 		if (individuals1.contains(individualName))
@@ -563,7 +782,7 @@ abstract public class AbstractVariantData {
 				Integer annotationValue = null;
 				try
 				{
-					annotationValue = (Integer) metadata.get(annotationField).get(sampleId);
+					annotationValue = (Integer) sampleGenotype.getAdditionalInfo().get(annotationField);
 				}
 				catch (Exception ignored)
 				{}

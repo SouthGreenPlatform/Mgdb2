@@ -18,6 +18,7 @@ package fr.cirad.mgdb.model.mongo.maintypes;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.TypeAlias;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
@@ -47,6 +48,7 @@ public class Assembly {
     /**
      * The description.
      */
+    @Indexed
     @Field(FIELDNAME_NAME)
     private String name;
 

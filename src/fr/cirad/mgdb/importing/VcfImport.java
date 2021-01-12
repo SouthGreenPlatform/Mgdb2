@@ -47,7 +47,6 @@ import fr.cirad.mgdb.model.mongo.maintypes.Individual;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantData;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantRunData;
 import fr.cirad.mgdb.model.mongo.subtypes.ReferencePosition;
-import fr.cirad.mgdb.model.mongo.subtypes.SampleGenotype;
 import fr.cirad.mgdb.model.mongodao.MgdbDao;
 import fr.cirad.tools.Helper;
 import fr.cirad.tools.ProgressIndicator;
@@ -153,6 +152,7 @@ public class VcfImport extends AbstractGenotypeImport {
      * @param sRun the run
      * @param sTechnology the technology
      * @param mainFileUrl the main file URL
+     * @param assemblyName the assembly name
      * @param importMode the import mode
      * @return a project ID if it was created by this method, otherwise null
      * @throws Exception the exception
@@ -193,17 +193,6 @@ public class VcfImport extends AbstractGenotypeImport {
                 }
             }
             
-			Assembly assembly = mongoTemplate.findOne(new Query(Criteria.where(Assembly.FIELDNAME_NAME).is(assemblyName)), Assembly.class);
-			if (assembly == null) {
-				if ("".equals(assemblyName)) {
-					assembly = new Assembly(0);
-					assembly.setName(assemblyName);
-					mongoTemplate.save(assembly);
-				}
-				else
-					throw new Exception("Assembly \"" + assemblyName + "\" not found in database. Supported assemblies are " + StringUtils.join(mongoTemplate.findDistinct(Assembly.FIELDNAME_NAME, Assembly.class, String.class), ", "));
-			}
-
             if (m_processID == null) {
                 m_processID = "IMPORT__" + sModule + "__" + sProject + "__" + sRun + "__" + System.currentTimeMillis();
             }
@@ -265,6 +254,17 @@ public class VcfImport extends AbstractGenotypeImport {
             LOG.info(info);
             progress.addStep(info);
             progress.moveToNextStep();
+            
+			Assembly assembly = mongoTemplate.findOne(new Query(Criteria.where(Assembly.FIELDNAME_NAME).is(assemblyName)), Assembly.class);
+			if (assembly == null) {
+				if ("".equals(assemblyName)) {
+					assembly = new Assembly(0);
+					assembly.setName(assemblyName);
+					mongoTemplate.save(assembly);
+				}
+				else
+					throw new Exception("Assembly \"" + assemblyName + "\" not found in database. Supported assemblies are " + StringUtils.join(mongoTemplate.findDistinct(Assembly.FIELDNAME_NAME, Assembly.class, String.class), ", "));
+			}
 
             HashMap<String, String> existingVariantIDs = buildSynonymToIdMapForExistingVariants(mongoTemplate, false, assembly.getId());
 
@@ -400,6 +400,7 @@ public class VcfImport extends AbstractGenotypeImport {
      * @param mongoTemplate the mongo template
      * @param header the VCF Header
      * @param variantToFeed the variant to feed
+	 * @param nAssemblyId the assembly id
      * @param vc the VariantContext
      * @param project the project
      * @param runName the run name
@@ -532,7 +533,6 @@ public class VcfImport extends AbstractGenotypeImport {
             if ("1/0".equals(gtCode))
             	gtCode = "0/1";	// convert to "0/1" so that MAF queries can work reliably
 
-//            SampleGenotype aGT = new SampleGenotype(gtCode);
             HashMap<String, Object> additionalInfo = new HashMap<>();
             if (isPhased) {
                 additionalInfo.put(VariantData.GT_FIELD_PHASED_GT, VariantData.rebuildVcfFormatGenotype(knownAlleleList, gtAllelesAsStrings, isPhased, true));
@@ -571,9 +571,8 @@ public class VcfImport extends AbstractGenotypeImport {
             	}
             }
 
-            if (genotype.isFiltered()) {
+            if (genotype.isFiltered())
                 additionalInfo.put(VariantData.FIELD_FILTERS, genotype.getFilters());
-            }
 
 //            run.getSampleGenotypes().put(usedSamples.get(sIndividual).getId(), aGT);	// v2 struct
             
@@ -601,11 +600,11 @@ public class VcfImport extends AbstractGenotypeImport {
 //            run.getData().put(nSpId + VariantRunData.FIELDNAME_GENOTYPES, gtCode);	// gt and ai fields together, not grouped by sample (new3 struct)
             
             int nSpId = usedSamples.get(sIndividual).getId();
-            run.setSampleGenotype(nSpId, gtCode); // gt and ai fields separate, getotypes grouped by sample, ai grouped by field (new4 struct) --> the best solution!
+            run.setSampleGenotype(nSpId, gtCode); // gt and ai fields separate, genotypes grouped by sample, ai grouped by field (new4 struct) --> the best solution!
             
 	  	    for (String fieldName : additionalInfo.keySet())
 	  	    	/*if (fieldName.equals("DP") || fieldName.equals("QR") || fieldName.equals("RO"))*/ {	// storing only searchable fields makes a BIG difference too!
-	  	        HashMap<Object, Object> md = run.getMetadata().get(fieldName);
+	  	        HashMap<Integer, Object> md = run.getMetadata().get(fieldName);
 	  	        if (md == null) {
 	  		       	md = new HashMap<>();
 	  		       	run.getMetadata().put(fieldName, md);
@@ -613,7 +612,7 @@ public class VcfImport extends AbstractGenotypeImport {
 	  	        md.put(nSpId, additionalInfo.get(fieldName));
 	  	    }
         }
-        
+
         run.setKnownAlleleList(variantToFeed.getKnownAlleleList());
         run.setReferencePositions(variantToFeed.getReferencePositions());
         run.setType(variantToFeed.getType());

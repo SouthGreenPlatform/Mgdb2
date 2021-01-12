@@ -26,6 +26,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
 import fr.cirad.mgdb.model.mongo.subtypes.AbstractVariantData;
+import fr.cirad.mgdb.model.mongo.subtypes.SampleGenotype;
 
 /**
  * The Class VariantRunData.
@@ -33,10 +34,10 @@ import fr.cirad.mgdb.model.mongo.subtypes.AbstractVariantData;
 @Document(collection = "variantRunData")
 @TypeAlias("R")
 
-public class VariantRunData extends AbstractVariantData
+public class VariantRunDataV2 extends AbstractVariantData
 {
-//	/** The Constant FIELDNAME_SAMPLEGENOTYPES. */
-//	public final static String FIELDNAME_SAMPLEGENOTYPES = "sp";
+	/** The Constant FIELDNAME_SAMPLEGENOTYPES. */
+	public final static String FIELDNAME_SAMPLEGENOTYPES = "sp";
 	
 	/** The Constant FIELDNAME_ADDITIONAL_INFO_EFFECT_NAME. */
 	public final static String FIELDNAME_ADDITIONAL_INFO_EFFECT_NAME = "EFF_nm";
@@ -46,9 +47,9 @@ public class VariantRunData extends AbstractVariantData
 	
 	public final static String FIELDNAME_GENOTYPES = "g";
 	
-	public final static String FIELDNAME_METADATA = "M";
+	public final static String FIELDNAME_METADATA = "m";
 	
-//	public final static String FIELDNAME_DATA = "d";
+	public final static String FIELDNAME_DATA = "d";
 
 	/**
 	 * The Class VariantRunDataId.
@@ -145,9 +146,9 @@ public class VariantRunData extends AbstractVariantData
 	@Id
 	private VariantRunDataId id;
 
-//	/** The sample genotypes. */
-//	@Field(FIELDNAME_SAMPLEGENOTYPES)
-//	private HashMap<Integer, SampleGenotype> sampleGenotypes = new HashMap<Integer, SampleGenotype>();
+	/** The sample genotypes. */
+	@Field(FIELDNAME_SAMPLEGENOTYPES)
+	private HashMap<Integer, SampleGenotype> sampleGenotypes = new HashMap<Integer, SampleGenotype>();
 	
 	/** The genotypes. */
 	@Field(FIELDNAME_GENOTYPES)
@@ -155,16 +156,16 @@ public class VariantRunData extends AbstractVariantData
 	
 	/** The metadata. */
 	@Field(FIELDNAME_METADATA)
-	private HashMap<String, HashMap<Integer, Object>> metadata = new HashMap<>();
+	private HashMap<Object, HashMap<Object, Object>> metadata = new HashMap<>();
 	
-//	/** The data. */
-//	@Field(FIELDNAME_DATA)
-//	private HashMap<String, Object> data = new HashMap<>();
+	/** The data. */
+	@Field(FIELDNAME_DATA)
+	private HashMap<String, Object> data = new HashMap<>();
 
 	/**
 	 * Instantiates a new variant run data.
 	 */
-	public VariantRunData() {
+	public VariantRunDataV2() {
 	}
 
 	/**
@@ -172,7 +173,7 @@ public class VariantRunData extends AbstractVariantData
 	 *
 	 * @param id the id
 	 */
-	public VariantRunData(VariantRunDataId id) {
+	public VariantRunDataV2(VariantRunDataId id) {
 		this.id = id;
 	}
 
@@ -211,47 +212,47 @@ public class VariantRunData extends AbstractVariantData
 		this.genotypes = genotypes;
 	}
 
-	public HashMap<String, HashMap<Integer, Object>> getMetadata() {
+	public HashMap<Object, HashMap<Object, Object>> getMetadata() {
 		return metadata;
 	}
 
-	public void setMetadata(HashMap<String, HashMap<Integer, Object>> metadata) {
+	public void setMetadata(HashMap<Object, HashMap<Object, Object>> metadata) {
 		this.metadata = metadata;
 	}
 
-//	public HashMap<String, Object> getData() {
-//		return data;
-//	}
-//
-//	public void setData(HashMap<String, Object> data) {
-//		this.data = data;
-//	}
+	public HashMap<String, Object> getData() {
+		return data;
+	}
+
+	public void setData(HashMap<String, Object> data) {
+		this.data = data;
+	}
 	
-//	public HashMap<Integer, SampleGenotype> getSampleGenotypes() {
-//		return sampleGenotypes;
-//	}
+	public HashMap<Integer, SampleGenotype> getSampleGenotypes() {
+		return sampleGenotypes;
+	}
 
 	public void setSampleGenotype(int nSampleId, String sGtCode) {
 		genotypes.put(nSampleId, sGtCode);
 	}
 
-//	public void setSampleGenotype2(int nSampleId, String sGtCode) {
-//		HashMap<Object, Object> spInfo = metadata.get(nSampleId);
-//		if (spInfo == null) {
-//			spInfo = new HashMap<>();
-//			metadata.put(nSampleId, spInfo);
-//		}
-//		spInfo.put(FIELDNAME_GENOTYPES, sGtCode);
-//	}
-//	
-//	public void setSampleGenotype3(int nSampleId, String sGtCode) {
-//		HashMap<Object, Object> spInfo = metadata.get(nSampleId);
-//		if (spInfo == null) {
-//			spInfo = new HashMap<>();
-//			metadata.put(nSampleId, spInfo);
-//		}
-//		spInfo.put(FIELDNAME_GENOTYPES, sGtCode);
-//	}
+	public void setSampleGenotype2(int nSampleId, String sGtCode) {
+		HashMap<Object, Object> spInfo = metadata.get(nSampleId);
+		if (spInfo == null) {
+			spInfo = new HashMap<>();
+			metadata.put(nSampleId, spInfo);
+		}
+		spInfo.put(FIELDNAME_GENOTYPES, sGtCode);
+	}
+	
+	public void setSampleGenotype3(int nSampleId, String sGtCode) {
+		HashMap<Object, Object> spInfo = metadata.get(nSampleId);
+		if (spInfo == null) {
+			spInfo = new HashMap<>();
+			metadata.put(nSampleId, spInfo);
+		}
+		spInfo.put(FIELDNAME_GENOTYPES, sGtCode);
+	}
 	
 	/* (non-Javadoc)
 	 * @see java.lang.Object#equals(java.lang.Object)
@@ -262,10 +263,10 @@ public class VariantRunData extends AbstractVariantData
 		if (this == o)
 			return true;
 		
-		if (o == null || !(o instanceof VariantRunData))
+		if (o == null || !(o instanceof VariantRunDataV2))
 			return false;
 		
-		return getId().equals(((VariantRunData)o).getId());
+		return getId().equals(((VariantRunDataV2)o).getId());
 	}
     
 	@Override
@@ -285,6 +286,4 @@ public class VariantRunData extends AbstractVariantData
 
 		return getId().toString();
 	}
-	
-
 }

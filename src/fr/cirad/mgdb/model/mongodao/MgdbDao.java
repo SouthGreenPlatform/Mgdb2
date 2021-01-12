@@ -293,7 +293,7 @@ public class MgdbDao
 				returnedFields.add(VariantRunData.SECTION_ADDITIONAL_INFO);
 				projectIdToReturnedRunFieldListMap.put(sample.getProjectId(), returnedFields);
 			}
-			returnedFields.add(VariantRunData.FIELDNAME_SAMPLEGENOTYPES + "." + sample.getId());
+			returnedFields.add(VariantRunData.FIELDNAME_GENOTYPES + "." + sample.getId());
 		}
 
 		LinkedHashMap<VariantData, Collection<VariantRunData>> result = getSampleGenotypes(mongoTemplate, variantFieldsToReturn, projectIdToReturnedRunFieldListMap, variantIdListToRestrictTo, sort);

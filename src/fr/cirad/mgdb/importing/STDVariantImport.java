@@ -309,7 +309,7 @@ public class STDVariantImport extends AbstractGenotypeImport {
 		for (int j=0; j<Math.max(1, nNumberOfRetries); j++)
 		{			
 			Query query = new Query(Criteria.where("_id").is(sMgdbVariantId));
-			query.fields().include(VariantData.FIELDNAME_REFERENCE_POSITION).include(VariantData.FIELDNAME_KNOWN_ALLELE_LIST).include(VariantData.FIELDNAME_PROJECT_DATA + "." + project.getId()).include(VariantData.FIELDNAME_VERSION);
+			query.fields().include(VariantData.FIELDNAME_REFERENCE_POSITION).include(VariantData.FIELDNAME_KNOWN_ALLELE_LIST)/*.include(VariantData.FIELDNAME_PROJECT_DATA + "." + project.getId())*/.include(VariantData.FIELDNAME_VERSION);
 			
 			VariantData variant = mongoTemplate.findOne(query, VariantData.class);
 			Update update = variant == null ? null : new Update();

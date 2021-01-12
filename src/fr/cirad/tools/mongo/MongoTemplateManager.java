@@ -188,7 +188,10 @@ public class MongoTemplateManager implements ApplicationContextAware {
         // we do this cleanup here because it only happens when the webapp is being (re)started
         for (Database db : commonsTemplate.findAll(Database.class)) { 
 //        for (String sModule : templateMap.keySet()) {
-         	List<ServerDescription> serverDescriptions = mongoClients.get(getModuleHost(db.getId())).getClusterDescription().getServerDescriptions();
+        	MongoClient client = mongoClients.get(getModuleHost(db.getId()));
+        	if (client == null)
+        		continue;
+         	List<ServerDescription> serverDescriptions = client.getClusterDescription().getServerDescriptions();
             MongoTemplate mongoTemplate = templateMap.get(db.getId());
             if (authorizedCleanupServers == null || (serverDescriptions.size() == 1 && authorizedCleanupServers.contains(serverDescriptions.get(0).getAddress().toString()))) {
                 for (String collName : mongoTemplate.getCollectionNames()) {
@@ -426,15 +429,17 @@ public class MongoTemplateManager implements ApplicationContextAware {
 			}
     }
     
-	public static boolean createDataSource(String sModule, String sHost, Map<String, Object> customFields, Long expiryDate) throws Exception {
+	public static Database createDataSource(String sModule, String sHost, boolean fPublic, boolean fHidden, Map<String, Object> customFields, Long expiryDate) throws Exception {
         if (commonsTemplate.exists(new Query(Criteria.where("_id").is(sModule)), Database.class))
         {
         	LOG.warn("Tried to create a module that already exists: " + sModule);
-        	return false;
+        	return null;
         }
 
 		Database db = new Database(sModule);
 		db.setHost(sHost);
+		db.setPublic(fPublic);
+		db.setHidden(fHidden);
 
 		invokeSetters(customFields, db);
 		fetchTaxonInfoForDB(db);
@@ -453,11 +458,11 @@ public class MongoTemplateManager implements ApplicationContextAware {
                 try {
                 	MongoTemplateManager.getCommonsTemplate().insert(db);
                 	templateMap.put(sModule, mongoTemplate);
-                	return true;
+                	return db;
                 }
                 catch (Exception e) {
                 	LOG.error("Error creating database", e);
-                	return false;
+                	return null;
                 }
             }
         }
