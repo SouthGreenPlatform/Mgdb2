@@ -44,12 +44,6 @@ public class VariantRunDataV2 extends AbstractVariantData
 	
 	/** The Constant FIELDNAME_ADDITIONAL_INFO_EFFECT_GENE. */
 	public final static String FIELDNAME_ADDITIONAL_INFO_EFFECT_GENE = "EFF_ge";
-	
-	public final static String FIELDNAME_GENOTYPES = "g";
-	
-	public final static String FIELDNAME_METADATA = "m";
-	
-	public final static String FIELDNAME_DATA = "d";
 
 	/**
 	 * The Class VariantRunDataId.
@@ -149,18 +143,6 @@ public class VariantRunDataV2 extends AbstractVariantData
 	/** The sample genotypes. */
 	@Field(FIELDNAME_SAMPLEGENOTYPES)
 	private HashMap<Integer, SampleGenotype> sampleGenotypes = new HashMap<Integer, SampleGenotype>();
-	
-	/** The genotypes. */
-	@Field(FIELDNAME_GENOTYPES)
-	private HashMap<Integer, String> genotypes = new HashMap<>();
-	
-	/** The metadata. */
-	@Field(FIELDNAME_METADATA)
-	private HashMap<Object, HashMap<Object, Object>> metadata = new HashMap<>();
-	
-	/** The data. */
-	@Field(FIELDNAME_DATA)
-	private HashMap<String, Object> data = new HashMap<>();
 
 	/**
 	 * Instantiates a new variant run data.
@@ -203,57 +185,25 @@ public class VariantRunDataV2 extends AbstractVariantData
 	public String getRunName() {
 		return getId().getRunName();
 	}
-	
-	public HashMap<Integer, String> getGenotypes() {
-		return genotypes;
-	}
 
-	public void setGenotypes(HashMap<Integer, String> genotypes) {
-		this.genotypes = genotypes;
-	}
-
-	public HashMap<Object, HashMap<Object, Object>> getMetadata() {
-		return metadata;
-	}
-
-	public void setMetadata(HashMap<Object, HashMap<Object, Object>> metadata) {
-		this.metadata = metadata;
-	}
-
-	public HashMap<String, Object> getData() {
-		return data;
-	}
-
-	public void setData(HashMap<String, Object> data) {
-		this.data = data;
-	}
-	
+	/**
+	 * Gets the sample genotypes.
+	 *
+	 * @return the sample genotypes
+	 */
 	public HashMap<Integer, SampleGenotype> getSampleGenotypes() {
 		return sampleGenotypes;
 	}
 
-	public void setSampleGenotype(int nSampleId, String sGtCode) {
-		genotypes.put(nSampleId, sGtCode);
+	/**
+	 * Sets the sample genotypes.
+	 *
+	 * @param genotypes the genotypes
+	 */
+	public void setSampleGenotypes(HashMap<Integer, SampleGenotype> genotypes) {
+		this.sampleGenotypes = genotypes;
 	}
 
-	public void setSampleGenotype2(int nSampleId, String sGtCode) {
-		HashMap<Object, Object> spInfo = metadata.get(nSampleId);
-		if (spInfo == null) {
-			spInfo = new HashMap<>();
-			metadata.put(nSampleId, spInfo);
-		}
-		spInfo.put(FIELDNAME_GENOTYPES, sGtCode);
-	}
-	
-	public void setSampleGenotype3(int nSampleId, String sGtCode) {
-		HashMap<Object, Object> spInfo = metadata.get(nSampleId);
-		if (spInfo == null) {
-			spInfo = new HashMap<>();
-			metadata.put(nSampleId, spInfo);
-		}
-		spInfo.put(FIELDNAME_GENOTYPES, sGtCode);
-	}
-	
 	/* (non-Javadoc)
 	 * @see java.lang.Object#equals(java.lang.Object)
 	 */
@@ -263,10 +213,10 @@ public class VariantRunDataV2 extends AbstractVariantData
 		if (this == o)
 			return true;
 		
-		if (o == null || !(o instanceof VariantRunDataV2))
+		if (o == null || !(o instanceof VariantRunData))
 			return false;
 		
-		return getId().equals(((VariantRunDataV2)o).getId());
+		return getId().equals(((VariantRunData)o).getId());
 	}
     
 	@Override
