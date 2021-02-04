@@ -25,6 +25,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 import org.apache.commons.lang.StringUtils;
@@ -33,7 +34,6 @@ import org.bson.Document;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.mapping.Field;
 
-import fr.cirad.mgdb.model.mongo.maintypes.Database;
 import fr.cirad.tools.mongo.MongoTemplateManager;
 
 /**
@@ -338,10 +338,10 @@ public class Helper {
     	return estimDocCount(MongoTemplateManager.get(sModule), documentClass);
     }
 
-    public static HashMap<String, String> getDocFieldNamesFromFieldAnnotationValues(Class clazz, Collection<String> annotationValues) {
-    	HashMap<String, String> result = new HashMap<>();
+    public static LinkedHashMap<String, String> getDocFieldNamesFromFieldAnnotationValues(Class clazz, Collection<String> annotationValues) {
+    	LinkedHashMap<String, String> result = new LinkedHashMap<>();
 		for (java.lang.reflect.Field field : clazz.getDeclaredFields()) {
-			org.springframework.data.mongodb.core.mapping.Field fieldAnnotation = field.getAnnotation(org.springframework.data.mongodb.core.mapping.Field.class);
+			Field fieldAnnotation = field.getAnnotation(Field.class);
 			if (fieldAnnotation != null && annotationValues.contains(fieldAnnotation.value()))
 				result.put(field.getName(), field.getType().getSimpleName());
 		}
