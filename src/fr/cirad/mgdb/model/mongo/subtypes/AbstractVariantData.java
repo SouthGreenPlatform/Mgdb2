@@ -36,24 +36,19 @@ import htsjdk.variant.variantcontext.VariantContext.Type;
 
 abstract public class AbstractVariantData {
 	/** The Constant FIELDNAME_ANALYSIS_METHODS. */
-	public final static String FIELDNAME_ANALYSIS_METHODS = "m";
-	public final static String FIELDNAME_ANALYSIS_METHODS_V2 = "am";
+	public final static String FIELDNAME_ANALYSIS_METHODS = "am";
 	
 	/** The Constant FIELDNAME_SYNONYMS. */
-	public final static String FIELDNAME_SYNONYMS = "s";
-	public final static String FIELDNAME_SYNONYMS_V2 = "sy";
+	public final static String FIELDNAME_SYNONYMS = "sy";
 	
 	/** The Constant FIELDNAME_KNOWN_ALLELE_LIST. */
-	public final static String FIELDNAME_KNOWN_ALLELE_LIST = "a";
-	public final static String FIELDNAME_KNOWN_ALLELE_LIST_V2 = "ka";
+	public final static String FIELDNAME_KNOWN_ALLELE_LIST = "ka";
 	
 	/** The Constant FIELDNAME_TYPE. */
-	public final static String FIELDNAME_TYPE = "t";
-	public final static String FIELDNAME_TYPE_V2 = "ty";
+	public final static String FIELDNAME_TYPE = "ty";
 	
 	/** The Constant FIELDNAME_REFERENCE_POSITION. */
-	public final static String FIELDNAME_REFERENCE_POSITION = "p";
-	public final static String FIELDNAME_REFERENCE_POSITION_V2 = "rp";
+	public final static String FIELDNAME_REFERENCE_POSITION = "rp";
 	
 //	/** The Constant FIELDNAME_PROJECT_DATA. */
 //	public final static String FIELDNAME_PROJECT_DATA = "pj";
@@ -68,8 +63,7 @@ abstract public class AbstractVariantData {
 	public final static String FIELDNAME_SYNONYM_TYPE_ID_INTERNAL = "in";
 	
 	/** The Constant SECTION_ADDITIONAL_INFO. */
-	public final static String SECTION_ADDITIONAL_INFO = "i";
-	public final static String SECTION_ADDITIONAL_INFO_V2 = "ai";
+	public final static String SECTION_ADDITIONAL_INFO = "ai";
 
 	/** The Constant FIELD_PHREDSCALEDQUAL, expected to be found in VCF files */
 	public static final String FIELD_PHREDSCALEDQUAL = "qual";
@@ -99,12 +93,10 @@ abstract public class AbstractVariantData {
 	public static final String GT_FIELD_PL = "PL";
 	
 	/** The Constant GT_FIELD_PHASED_GT. */
-	public static final String GT_FIELD_PHASED_GT = "G";
-	public static final String GT_FIELD_PHASED_GT_V2 = "phGT";
+	public static final String GT_FIELD_PHASED_GT = "phGT";
 	
 	/** The Constant GT_FIELD_PHASED_ID. */
-	public static final String GT_FIELD_PHASED_ID = "I";
-	public static final String GT_FIELD_PHASED_ID_V2 = "phID";
+	public static final String GT_FIELD_PHASED_ID = "phID";
 
 	/** The Constant GT_FIELDVAL_AL_MISSING. */
 	public static final String GT_FIELDVAL_AL_MISSING = ".";
