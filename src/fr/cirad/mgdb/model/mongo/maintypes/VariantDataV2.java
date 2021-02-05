@@ -25,7 +25,7 @@ import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
-import fr.cirad.mgdb.model.mongo.subtypes.AbstractVariantData;
+import fr.cirad.mgdb.model.mongo.subtypes.AbstractVariantDataV2;
 //import fr.cirad.mgdb.model.mongo.subtypes.ReferencePosition;
 
 /**
@@ -36,7 +36,7 @@ import fr.cirad.mgdb.model.mongo.subtypes.AbstractVariantData;
 //@CompoundIndexes({
 //    @CompoundIndex(def = "{'" + VariantData.FIELDNAME_REFERENCE_POSITION + "." + ReferencePosition.FIELDNAME_SEQUENCE + "': 1, '" + VariantData.FIELDNAME_REFERENCE_POSITION + "." + ReferencePosition.FIELDNAME_START_SITE + "': 1}")
 //})
-public class VariantDataV2 extends AbstractVariantData
+public class VariantDataV2 extends AbstractVariantDataV2
 {
 	/** The Constant LOG. */
 	private static final Logger LOG = Logger.getLogger(VariantDataV2.class);

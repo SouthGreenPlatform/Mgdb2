@@ -36,34 +36,34 @@ import htsjdk.variant.variantcontext.VariantContext.Type;
 
 abstract public class AbstractVariantData {
 	/** The Constant FIELDNAME_ANALYSIS_METHODS. */
-	public final static String FIELDNAME_ANALYSIS_METHODS = "am";
+	public final static String FIELDNAME_ANALYSIS_METHODS = "m";
 	
 	/** The Constant FIELDNAME_SYNONYMS. */
-	public final static String FIELDNAME_SYNONYMS = "sy";
+	public final static String FIELDNAME_SYNONYMS = "s";
 	
 	/** The Constant FIELDNAME_KNOWN_ALLELE_LIST. */
-	public final static String FIELDNAME_KNOWN_ALLELE_LIST = "ka";
+	public final static String FIELDNAME_KNOWN_ALLELE_LIST = "a";
 	
 	/** The Constant FIELDNAME_TYPE. */
-	public final static String FIELDNAME_TYPE = "ty";
+	public final static String FIELDNAME_TYPE = "t";
 	
 	/** The Constant FIELDNAME_REFERENCE_POSITION. */
-	public final static String FIELDNAME_REFERENCE_POSITION = "rp";
+	public final static String FIELDNAME_REFERENCE_POSITION = "p";
 	
 //	/** The Constant FIELDNAME_PROJECT_DATA. */
 //	public final static String FIELDNAME_PROJECT_DATA = "pj";
 	
 	/** The Constant FIELDNAME_SYNONYM_TYPE_ID_ILLUMINA. */
-	public final static String FIELDNAME_SYNONYM_TYPE_ID_ILLUMINA = "il";
+	public final static String FIELDNAME_SYNONYM_TYPE_ID_ILLUMINA = "i";
 	
 	/** The Constant FIELDNAME_SYNONYM_TYPE_ID_NCBI. */
-	public final static String FIELDNAME_SYNONYM_TYPE_ID_NCBI = "nc";
+	public final static String FIELDNAME_SYNONYM_TYPE_ID_NCBI = "r";
 	
 	/** The Constant FIELDNAME_SYNONYM_TYPE_ID_INTERNAL. */
-	public final static String FIELDNAME_SYNONYM_TYPE_ID_INTERNAL = "in";
+	public final static String FIELDNAME_SYNONYM_TYPE_ID_INTERNAL = "n";
 	
 	/** The Constant SECTION_ADDITIONAL_INFO. */
-	public final static String SECTION_ADDITIONAL_INFO = "ai";
+	public final static String SECTION_ADDITIONAL_INFO = "i";
 
 	/** The Constant FIELD_PHREDSCALEDQUAL, expected to be found in VCF files */
 	public static final String FIELD_PHREDSCALEDQUAL = "qual";
@@ -556,6 +556,31 @@ abstract public class AbstractVariantData {
 				try
 				{
 					annotationValue = (Integer) metadata.get(annotationField).get(sampleId);
+				}
+				catch (Exception ignored)
+				{}
+				if (annotationValue != null && annotationValue < someThresholdsToCheck.get(annotationField))
+					return false;
+			}
+		return true;
+	}
+    
+	// tells whether applied filters imply to treat this genotype as missing data
+    public static boolean gtPassesVcfAnnotationFiltersV2(String individualName, SampleGenotype sampleGenotype, Collection<String> individuals1, HashMap<String, Float> annotationFieldThresholds, Collection<String> individuals2, HashMap<String, Float> annotationFieldThresholds2)
+    {
+		List<HashMap<String, Float>> thresholdsToCheck = new ArrayList<HashMap<String, Float>>();
+		if (individuals1.contains(individualName))
+			thresholdsToCheck.add(annotationFieldThresholds);
+		if (individuals2.contains(individualName))
+			thresholdsToCheck.add(annotationFieldThresholds2);
+		
+		for (HashMap<String, Float> someThresholdsToCheck : thresholdsToCheck)
+			for (String annotationField : someThresholdsToCheck.keySet())
+			{
+				Integer annotationValue = null;
+				try
+				{
+					annotationValue = (Integer) sampleGenotype.getAdditionalInfo().get(annotationField);
 				}
 				catch (Exception ignored)
 				{}

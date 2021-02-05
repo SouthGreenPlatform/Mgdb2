@@ -92,7 +92,7 @@ public abstract class AbstractIndividualOrientedExportHandler implements IExport
 	 * @param readyToExportFiles the ready to export files
 	 * @throws Exception the exception
 	 */
-	abstract public void exportData(OutputStream outputStream, String sModule, int nAssemblyId, Collection<File> individualExportFiles, boolean fDeleteSampleExportFilesOnExit, ProgressIndicator progress, MongoCollection<Document> varColl, Document varQuery, Map<String, String> markerSynonyms, Map<String, InputStream> readyToExportFiles) throws Exception;
+	abstract public void exportData(OutputStream outputStream, String sModule, Integer nAssemblyId,Collection<File> individualExportFiles, boolean fDeleteSampleExportFilesOnExit, ProgressIndicator progress, MongoCollection<Document> varColl, Document varQuery, Map<String, String> markerSynonyms, Map<String, InputStream> readyToExportFiles) throws Exception;
 
 	/**
 	 * Creates the export files.
@@ -111,7 +111,7 @@ public abstract class AbstractIndividualOrientedExportHandler implements IExport
 	 * @return a map providing one File per individual
 	 * @throws Exception the exception
 	 */
-	public TreeMap<String, File> createExportFiles(String sModule, int nAssemblyId, MongoCollection<Document> varColl, Document varQuery, Collection<GenotypingSample> samples1, Collection<GenotypingSample> samples2, String exportID, HashMap<String, Float> annotationFieldThresholds, HashMap<String, Float> annotationFieldThresholds2, List<GenotypingSample> samplesToExport, final ProgressIndicator progress) throws Exception
+	public TreeMap<String, File> createExportFiles(String sModule, Integer nAssemblyId,MongoCollection<Document> varColl, Document varQuery, Collection<GenotypingSample> samples1, Collection<GenotypingSample> samples2, String exportID, HashMap<String, Float> annotationFieldThresholds, HashMap<String, Float> annotationFieldThresholds2, List<GenotypingSample> samplesToExport, final ProgressIndicator progress) throws Exception
 	{
 		long before = System.currentTimeMillis();
 
@@ -223,8 +223,8 @@ public abstract class AbstractIndividualOrientedExportHandler implements IExport
 
 		long markerCount = varColl.countDocuments(varQuery);
 		try (MongoCursor<Document> markerCursor = varColl.find(varQuery).projection(projectionDoc(nAssemblyId)).sort(sortDoc(nAssemblyId)).noCursorTimeout(true).collation(collationObj).batchSize(nQueryChunkSize).iterator()) {
-			AsyncExportTool syncExportTool = new AsyncExportTool(markerCursor, markerCount, nQueryChunkSize, mongoTemplate, samplesToExport, dataOutputHandler, progress);
-			syncExportTool.launch();
+			AsyncExportTool asyncExportTool = new AsyncExportTool(markerCursor, markerCount, nQueryChunkSize, mongoTemplate, samplesToExport, dataOutputHandler, progress);
+			asyncExportTool.launch();
 	
 			while (progress.getCurrentStepProgress() < 100 && !progress.isAborted())
 				Thread.sleep(500);

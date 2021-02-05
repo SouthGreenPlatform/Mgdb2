@@ -359,7 +359,7 @@ public class HapMapImport extends AbstractGenotypeImport {
 	 * @return the variant run data
 	 * @throws Exception the exception
 	 */
-	static private VariantRunData addHapMapDataToVariant(MongoTemplate mongoTemplate, VariantData variantToFeed, int nAssemblyId, RawHapMapFeature hmFeature, GenotypingProject project, String runName, Map<String /*individual*/, GenotypingSample> usedSamples) throws Exception
+	static private VariantRunData addHapMapDataToVariant(MongoTemplate mongoTemplate, VariantData variantToFeed, Integer nAssemblyId,RawHapMapFeature hmFeature, GenotypingProject project, String runName, Map<String /*individual*/, GenotypingSample> usedSamples) throws Exception
 	{
 		// mandatory fields
 		if (variantToFeed.getType() == null)

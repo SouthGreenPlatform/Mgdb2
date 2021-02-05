@@ -411,7 +411,7 @@ public class VcfImport extends AbstractGenotypeImport {
      * @return the variant run data
      * @throws Exception the exception
      */
-    static private VariantRunData addVcfDataToVariant(MongoTemplate mongoTemplate, VCFHeader header, VariantData variantToFeed, int nAssemblyId, VariantContext vc, GenotypingProject project, String runName, HashMap<String /*individual*/, Comparable> phasingGroup, Map<String /*individual*/, GenotypingSample> usedSamples, int effectAnnotationPos, int geneIdAnnotationPos) throws Exception
+    static private VariantRunData addVcfDataToVariant(MongoTemplate mongoTemplate, VCFHeader header, VariantData variantToFeed, Integer nAssemblyId,VariantContext vc, GenotypingProject project, String runName, HashMap<String /*individual*/, Comparable> phasingGroup, Map<String /*individual*/, GenotypingSample> usedSamples, int effectAnnotationPos, int geneIdAnnotationPos) throws Exception
     {
         // mandatory fields
         if (variantToFeed.getType() == null) {

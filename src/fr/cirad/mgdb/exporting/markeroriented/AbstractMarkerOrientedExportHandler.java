@@ -53,12 +53,12 @@ public abstract class AbstractMarkerOrientedExportHandler implements IExportHand
 	/** The marker oriented export handlers. */
 	static private TreeMap<String, AbstractMarkerOrientedExportHandler> markerOrientedExportHandlers = null;
 
-	protected static Document projectionDoc(int nAssemblyId) {
-		return new Document(VariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(VariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId + "." + ReferencePosition.FIELDNAME_START_SITE, 1);	
+	protected static Document projectionDoc(Integer nAssemblyId) {
+		return new Document(VariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(VariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "")  + "." + ReferencePosition.FIELDNAME_START_SITE, 1);	
 	}
 
-	protected static Document sortDoc(int nAssemblyId) {
-		return new Document(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId + "." + ReferencePosition.FIELDNAME_START_SITE, 1);
+	protected static Document sortDoc(Integer nAssemblyId) {
+		return new Document(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "")  + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "")  + "." + ReferencePosition.FIELDNAME_START_SITE, 1);
 	}
 
 	/**
@@ -80,7 +80,7 @@ public abstract class AbstractMarkerOrientedExportHandler implements IExportHand
 	 * @param readyToExportFiles files to export along with the genotyping data
 	 * @throws Exception the exception
 	 */
-	abstract public void exportData(OutputStream outputStream, String sModule, int nAssemblyId, Collection<GenotypingSample> samples1, Collection<GenotypingSample> samples2, ProgressIndicator progress, MongoCollection<Document> varColl, Document varQuery, Map<String, String> markerSynonyms, HashMap<String, Float> annotationFieldThresholds, HashMap<String, Float> annotationFieldThresholds2, List<GenotypingSample> samplesToExport, Map<String, InputStream> readyToExportFiles) throws Exception;
+	abstract public void exportData(OutputStream outputStream, String sModule, Integer nAssemblyId,Collection<GenotypingSample> samples1, Collection<GenotypingSample> samples2, ProgressIndicator progress, MongoCollection<Document> varColl, Document varQuery, Map<String, String> markerSynonyms, HashMap<String, Float> annotationFieldThresholds, HashMap<String, Float> annotationFieldThresholds2, List<GenotypingSample> samplesToExport, Map<String, InputStream> readyToExportFiles) throws Exception;
 
 //	/**
 //	 * Gets the individuals from samples.

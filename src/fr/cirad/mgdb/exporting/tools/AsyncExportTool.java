@@ -48,15 +48,15 @@ public class AsyncExportTool {
 	private int nQueryChunkSize;
 	private List<GenotypingSample> samples;
 	private ProgressIndicator progress;
-	private AbstractDataOutputHandler<Integer, LinkedHashMap<VariantData, Collection<VariantRunData>>> dataOutputHandler;
+	private AbstractDataOutputHandler<Integer, LinkedHashMap/*<VariantData, Collection<VariantRunData>>*/> dataOutputHandler;
 
 	private int queryChunkIndex = 0, lastWrittenChunkIndex = -1;
-	private ConcurrentSkipListMap<Integer, LinkedHashMap<VariantData, Collection<VariantRunData>>> dataWritingQueue;
+	private ConcurrentSkipListMap<Integer, LinkedHashMap/*<VariantData, Collection<VariantRunData>>*/> dataWritingQueue;
 	private boolean fHasBeenLaunched = false;
 	
 	private int nNumberOfChunks;
 
-	public AsyncExportTool(MongoCursor<Document> markerCursor, long nTotalMarkerCount, int nQueryChunkSize, MongoTemplate mongoTemplate, List<GenotypingSample> samples, AbstractDataOutputHandler<Integer, LinkedHashMap<VariantData, Collection<VariantRunData>>> dataOutputHandler, ProgressIndicator progress) throws Exception
+	public AsyncExportTool(MongoCursor<Document> markerCursor, long nTotalMarkerCount, int nQueryChunkSize, MongoTemplate mongoTemplate, List<GenotypingSample> samples, AbstractDataOutputHandler<Integer, LinkedHashMap/*<VariantData, Collection<VariantRunData>>*/> dataOutputHandler, ProgressIndicator progress) throws Exception
 	{
 		if (!markerCursor.hasNext())
 			throw new Exception("markerCursor contains no data!");
@@ -113,7 +113,10 @@ public class AsyncExportTool {
 			{
 				try
 				{
-					dataWritingQueue.put(nFinalChunkIndex, MgdbDao.getSampleGenotypes(mongoTemplate, samples, currentMarkers, true, null /*new Sort(VariantData.FIELDNAME_REFERENCE_POSITION + "." + ChromosomalPosition.FIELDNAME_SEQUENCE).and(new Sort(VariantData.FIELDNAME_REFERENCE_POSITION + "." + ChromosomalPosition.FIELDNAME_START_SITE))*/));
+					if (mongoTemplate.getDb().getName().startsWith("mgdb2_"))
+						dataWritingQueue.put(nFinalChunkIndex, MgdbDao.getSampleGenotypesV2(mongoTemplate, samples, currentMarkers, true, null));
+					else
+						dataWritingQueue.put(nFinalChunkIndex, MgdbDao.getSampleGenotypes(mongoTemplate, samples, currentMarkers, true, null));
 				}
 				catch (Exception e)
 				{

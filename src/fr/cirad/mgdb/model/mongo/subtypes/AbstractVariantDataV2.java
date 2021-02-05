@@ -125,7 +125,7 @@ abstract public class AbstractVariantDataV2
 
 	/** The reference position. */
 	@Field(FIELDNAME_REFERENCE_POSITION)
-	Map<Integer, ReferencePosition> referencePositions = new HashMap<>();
+	ReferencePosition referencePosition = null;
 	
 	/** The synonyms. */
 	@Field(FIELDNAME_SYNONYMS)
@@ -142,6 +142,7 @@ abstract public class AbstractVariantDataV2
 	/** The additional info. */
 	@Field(SECTION_ADDITIONAL_INFO)
 	private HashMap<String, Object> additionalInfo = null;
+
 	
 	protected static Document projectionDoc(int nAssemblyId) {
 		return new Document(VariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(VariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId + "." + ReferencePosition.FIELDNAME_START_SITE, 1);	
@@ -396,42 +397,23 @@ abstract public class AbstractVariantDataV2
 	}
 
 	/**
-	 * Gets the reference positions by assembly ID.
-	 *
-	 * @return the reference positions
-	 */
-	public Map<Integer, ReferencePosition> getReferencePositions() {
-		return referencePositions;
-	}
-	
-	/**
-	 * Gets the reference position for a given assembly ID.
+	 * Gets the reference position.
 	 *
 	 * @return the reference position
 	 */
-	public ReferencePosition getReferencePosition(int nAssemblyId) {
-		return referencePositions.get(nAssemblyId);
+	public ReferencePosition getReferencePosition() {
+		return referencePosition;
 	}
 
 	/**
-	 * Sets the reference positions.
-	 *
-	 * @param referencePositions the new reference position
-	 */
-	public void setReferencePositions(Map<Integer, ReferencePosition> referencePositions) {
-		this.referencePositions = referencePositions;
-	}
-	
-
-	/**
-	 * Sets the reference position for a given assembly ID.
+	 * Sets the reference position.
 	 *
 	 * @param referencePosition the new reference position
 	 */
-	public void setReferencePosition(int nAssemblyId, ReferencePosition referencePosition) {
-		referencePositions.put(nAssemblyId, referencePosition);
+	public void setReferencePosition(ReferencePosition referencePosition) {
+		this.referencePosition = referencePosition;
 	}
-	
+
 	/**
 	 * Gets the known allele list.
 	 *
@@ -569,7 +551,7 @@ abstract public class AbstractVariantDataV2
 	 * @return the variant context
 	 * @throws Exception the exception
 	 */
-//	public VariantContext toVariantContext(Collection<VariantRunData> runs, int nAssemblyId, boolean exportVariantIDs, Collection<GenotypingSample> samplesToExport, Collection<String> individuals1, Collection<String> individuals2, HashMap<Integer, Object> previousPhasingIds, HashMap<String, Float> annotationFieldThresholds1, HashMap<String, Float> annotationFieldThresholds2, FileWriter warningFileWriter, Comparable synonym) throws Exception
+//	public VariantContext toVariantContext(Collection<VariantRunData> runs, Integer nAssemblyId,boolean exportVariantIDs, Collection<GenotypingSample> samplesToExport, Collection<String> individuals1, Collection<String> individuals2, HashMap<Integer, Object> previousPhasingIds, HashMap<String, Float> annotationFieldThresholds1, HashMap<String, Float> annotationFieldThresholds2, FileWriter warningFileWriter, Comparable synonym) throws Exception
 //	{
 //		ArrayList<Genotype> genotypes = new ArrayList<Genotype>();
 //		String sRefAllele = knownAlleleList.size() == 0 ? "" : knownAlleleList.get(0);

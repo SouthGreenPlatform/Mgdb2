@@ -42,8 +42,10 @@ import fr.cirad.mgdb.model.mongo.maintypes.GenotypingProject;
 import fr.cirad.mgdb.model.mongo.maintypes.GenotypingSample;
 import fr.cirad.mgdb.model.mongo.maintypes.Individual;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantData;
+import fr.cirad.mgdb.model.mongo.maintypes.VariantDataV2;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantRunData;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantRunData.VariantRunDataId;
+import fr.cirad.mgdb.model.mongo.maintypes.VariantRunDataV2;
 import fr.cirad.mgdb.model.mongo.subtypes.ReferencePosition;
 import fr.cirad.tools.mongo.MongoTemplateManager;
 
@@ -362,4 +364,118 @@ public class MgdbDao
         MongoTemplate mongoTemplate = MongoTemplateManager.get(sModule);
         return mongoTemplate.findById(individual, Individual.class).getPopulation();
     }
+    
+	/**
+	 * Gets the sample genotypes (for v2 model data)
+	 *
+	 * @param mongoTemplate the mongo template
+	 * @param variantFieldsToReturn the variant fields to return
+	 * @param projectIdToReturnedRunFieldListMap the project id to returned run field list map
+	 * @param variantIdListToRestrictTo the variant id list to restrict to
+	 * @param sort the sort
+	 * @return the sample genotypes
+	 * @throws Exception the exception
+	 */
+	private static LinkedHashMap<VariantDataV2, Collection<VariantRunDataV2>> getSampleGenotypesV2(MongoTemplate mongoTemplate, ArrayList<String> variantFieldsToReturn, HashMap<Integer, ArrayList<String>> projectIdToReturnedRunFieldListMap, List<Object> variantIdListToRestrictTo, Sort sort) throws Exception
+	{
+		Query variantQuery = new Query();
+		if (sort != null)
+			variantQuery.with(sort);
+
+		Criteria runQueryVariantCriteria = null;
+
+		if (variantIdListToRestrictTo != null && variantIdListToRestrictTo.size() > 0)
+		{
+			variantQuery.addCriteria(new Criteria().where("_id").in(variantIdListToRestrictTo));
+			runQueryVariantCriteria = new Criteria().where("_id." + VariantRunDataId.FIELDNAME_VARIANT_ID).in(variantIdListToRestrictTo);
+		}
+		variantQuery.fields().include("_id");
+		for (String returnedField : variantFieldsToReturn)
+			variantQuery.fields().include(returnedField);
+		
+		HashMap<String, VariantDataV2> variantIdToVariantMap = new HashMap<>();		
+		List<VariantDataV2> variants = mongoTemplate.find(variantQuery, VariantDataV2.class);
+		for (VariantDataV2 vd : variants)
+			variantIdToVariantMap.put(vd.getId(), vd);
+		
+		// next block may be removed at some point (only some consistency checking)
+		if (variantIdListToRestrictTo != null && variantIdListToRestrictTo.size() != variants.size())
+		{
+			mainLoop : for (Object vi : variantIdListToRestrictTo)
+			{
+				for (VariantDataV2 vd : variants)
+				{
+					if (!variantIdToVariantMap.containsKey(vd.getId()))
+						variantIdToVariantMap.put(vd.getId(), vd);
+					
+					if (vd.getId().equals(vi))
+						continue mainLoop;
+				}
+				LOG.error(vi + " requested but not returned");
+			}
+			throw new Exception("Found " + variants.size() + " variants where " + variantIdListToRestrictTo.size() + " were expected");
+		}
+
+		LinkedHashMap<VariantDataV2, Collection<VariantRunDataV2>> result = new LinkedHashMap<VariantDataV2, Collection<VariantRunDataV2>>();
+		for (Object variantId : variantIdListToRestrictTo)
+			result.put(variantIdToVariantMap.get(variantId.toString()), new ArrayDeque<VariantRunDataV2>());
+
+		for (int projectId : projectIdToReturnedRunFieldListMap.keySet())
+		{
+			Query runQuery = new Query(Criteria.where("_id." + VariantRunDataId.FIELDNAME_PROJECT_ID).is(projectId));
+			if (runQueryVariantCriteria != null)
+				runQuery.addCriteria(runQueryVariantCriteria);
+
+			runQuery.fields().include("_id");
+			for (String returnedField : projectIdToReturnedRunFieldListMap.get(projectId))
+				runQuery.fields().include(returnedField);
+			
+			List<VariantRunDataV2> runs = mongoTemplate.find(runQuery, VariantRunDataV2.class);
+			for (VariantRunDataV2 run : runs)
+				result.get(variantIdToVariantMap.get(run.getId().getVariantId())).add(run);
+		}
+	
+		if (result.size() != variantIdListToRestrictTo.size())
+			throw new Exception("Bug: we should be returning " + variantIdListToRestrictTo.size() + " results but we only have " + result.size());
+
+		return result;
+	}
+	
+	/**
+	 * Gets the sample genotypes (for v2 model data)
+	 *
+	 * @param mongoTemplate the mongo template
+	 * @param samples the samples
+	 * @param variantIdListToRestrictTo the variant id list to restrict to
+	 * @param fReturnVariantTypes whether or not to return variant types
+	 * @param sort the sort
+	 * @return the sample genotypes
+	 * @throws Exception the exception
+	 */
+	public static LinkedHashMap<VariantDataV2, Collection<VariantRunDataV2>> getSampleGenotypesV2(MongoTemplate mongoTemplate, Collection<GenotypingSample> samples, List<Object> variantIdListToRestrictTo, boolean fReturnVariantTypes, Sort sort) throws Exception
+	{
+		ArrayList<String> variantFieldsToReturn = new ArrayList<String>();
+		variantFieldsToReturn.add(VariantDataV2.FIELDNAME_KNOWN_ALLELE_LIST);
+		variantFieldsToReturn.add(VariantDataV2.FIELDNAME_REFERENCE_POSITION);
+		if (fReturnVariantTypes)
+			variantFieldsToReturn.add(VariantDataV2.FIELDNAME_TYPE);
+		
+		HashMap<Integer /*project id*/, ArrayList<String>> projectIdToReturnedRunFieldListMap = new HashMap<Integer, ArrayList<String>>();
+		for (GenotypingSample sample : samples)
+		{
+			ArrayList<String> returnedFields = projectIdToReturnedRunFieldListMap.get(sample.getProjectId());
+			if (returnedFields == null)
+			{
+				returnedFields = new ArrayList<String>();
+				returnedFields.add("_class");
+				returnedFields.add(VariantRunDataV2.SECTION_ADDITIONAL_INFO);
+				projectIdToReturnedRunFieldListMap.put(sample.getProjectId(), returnedFields);
+			}
+			returnedFields.add(VariantRunDataV2.FIELDNAME_SAMPLEGENOTYPES + "." + sample.getId());
+		}
+
+		LinkedHashMap<VariantDataV2, Collection<VariantRunDataV2>> result = getSampleGenotypesV2(mongoTemplate, variantFieldsToReturn, projectIdToReturnedRunFieldListMap, variantIdListToRestrictTo, sort);
+		
+		return result;
+	}
 }

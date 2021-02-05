@@ -154,7 +154,7 @@ public class VariantData extends AbstractVariantData
  * @return the variant context
  * @throws Exception the exception
  */
-public VariantContext toVariantContext(Collection<VariantRunData> runs, int nAssemblyId, boolean exportVariantIDs, Collection<GenotypingSample> samplesToExport, Collection<String> individuals1, Collection<String> individuals2, HashMap<Integer, Object> previousPhasingIds, HashMap<String, Float> annotationFieldThresholds1, HashMap<String, Float> annotationFieldThresholds2, FileWriter warningFileWriter, Comparable synonym) throws Exception
+public VariantContext toVariantContext(Collection<VariantRunData> runs, Integer nAssemblyId,boolean exportVariantIDs, Collection<GenotypingSample> samplesToExport, Collection<String> individuals1, Collection<String> individuals2, HashMap<Integer, Object> previousPhasingIds, HashMap<String, Float> annotationFieldThresholds1, HashMap<String, Float> annotationFieldThresholds2, FileWriter warningFileWriter, Comparable synonym) throws Exception
 {
 	ArrayList<Genotype> genotypes = new ArrayList<Genotype>();
 	String sRefAllele = knownAlleleList.size() == 0 ? "" : knownAlleleList.get(0);

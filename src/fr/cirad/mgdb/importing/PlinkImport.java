@@ -253,7 +253,7 @@ public class PlinkImport extends AbstractGenotypeImport {
 		}
 	}
 
-	public long importTempFileContents(ProgressIndicator progress, MongoTemplate mongoTemplate, int nAssemblyId, File[] tempFiles, LinkedHashMap<String, String> variantsAndPositions, HashMap<String, String> existingVariantIDs, GenotypingProject project, String sRun, HashMap<String, ArrayList<String>> inconsistencies, Map<String, String> userIndividualToPopulationMap) throws Exception			
+	public long importTempFileContents(ProgressIndicator progress, MongoTemplate mongoTemplate, Integer nAssemblyId,File[] tempFiles, LinkedHashMap<String, String> variantsAndPositions, HashMap<String, String> existingVariantIDs, GenotypingProject project, String sRun, HashMap<String, ArrayList<String>> inconsistencies, Map<String, String> userIndividualToPopulationMap) throws Exception			
 	{
 		String[] individuals = userIndividualToPopulationMap.keySet().toArray(new String[userIndividualToPopulationMap.size()]);
 		HashSet<VariantData> unsavedVariants = new HashSet<VariantData>();	// HashSet allows no duplicates
@@ -496,7 +496,7 @@ public class PlinkImport extends AbstractGenotypeImport {
 	 * Adds the PLINK data to variant.
 	 * @param fImportUnknownVariants 
 	 */
-	static private VariantRunData addPlinkDataToVariant(MongoTemplate mongoTemplate, VariantData variantToFeed, int nAssemblyId, String sequence, Long bpPos, Map<String, String> userIndividualToPopulationMap, String[][] alleles, GenotypingProject project, String runName, Map<String /*individual*/, GenotypingSample> usedSamples, boolean fImportUnknownVariants) throws Exception
+	static private VariantRunData addPlinkDataToVariant(MongoTemplate mongoTemplate, VariantData variantToFeed, Integer nAssemblyId,String sequence, Long bpPos, Map<String, String> userIndividualToPopulationMap, String[][] alleles, GenotypingProject project, String runName, Map<String /*individual*/, GenotypingSample> usedSamples, boolean fImportUnknownVariants) throws Exception
 	{
 		// mandatory fields
 		if (variantToFeed.getType() == null)
