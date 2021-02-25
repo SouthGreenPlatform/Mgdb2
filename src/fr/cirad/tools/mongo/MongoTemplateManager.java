@@ -226,34 +226,16 @@ public class MongoTemplateManager implements ApplicationContextAware {
     }
     
     static public void clearExpiredDatabases() {
-        try
-        {
-            Enumeration<String> bundleKeys = dataSourceBundle.getKeys();
-            while (bundleKeys.hasMoreElements()) {
-				String key = bundleKeys.nextElement();
-				String[] datasourceInfo = dataSourceBundle.getString(key).split(",");
-				
-				if (datasourceInfo.length < 2) {
-				    LOG.error("Unable to deal with datasource info for key " + key + ". Datasource definition requires at least 2 comma-separated strings: mongo host bean name (defined in Spring application context) and database name");
-				    continue;
-				}
-				
-				if (datasourceInfo[1].contains(EXPIRY_PREFIX)) {
-				    long expiryDate = Long.valueOf((datasourceInfo[1].substring(datasourceInfo[1].lastIndexOf(EXPIRY_PREFIX) + EXPIRY_PREFIX.length())));
-				    if (System.currentTimeMillis() > expiryDate) {
-				        if (removeDataSource(key, true))
-				        	LOG.info("Removed expired datasource entry: " + key + " and temporary database: " + datasourceInfo[1]);
-				    }
-				}
-
-            }
-        }
-        catch (MissingResourceException mre)
-        {
-            LOG.error("Unable to find file " + resource + ".properties, you may need to adjust your classpath", mre);
-        }
+		for (Database db : MongoTemplateManager.getCommonsTemplate().find(new Query(Criteria.where("_id").in(MongoTemplateManager.getAvailableModules(null))), Database.class))
+			if (db.getName().contains(EXPIRY_PREFIX)) {
+			    long expiryDate = Long.valueOf((db.getName().substring(db.getName().lastIndexOf(EXPIRY_PREFIX) + EXPIRY_PREFIX.length())));
+			    if (System.currentTimeMillis() > expiryDate) {
+			        if (removeDataSource(db.getId(), true))
+			        	LOG.info("Removed expired datasource entry " + db.getId() + " and temporary database " + db.getName());
+			    }
+			}
     }
-    
+
     static public void parseTaxInfoAndAddToDB(String taxInfo, Database db) {
     	if (taxInfo == null)
     		return;
@@ -704,10 +686,17 @@ public class MongoTemplateManager implements ApplicationContextAware {
     /**
      * Gets the available modules.
      *
+     * @param nMgdbVersion the module version (null for any version)
      * @return the available modules
      */
-    static public Collection<String> getAvailableModules() {
-        return templateMap.keySet();
+    static public Collection<String> getAvailableModules(Integer nMgdbVersion) {
+    	if (nMgdbVersion == null)
+    		return templateMap.keySet();
+    	
+    	if (nMgdbVersion < 1 || nMgdbVersion > 3)
+    		return new ArrayList<>();
+    	
+    	return commonsTemplate.findDistinct(new Query(Criteria.where(Database.FIELDNAME_NAME).regex("^mgdb" + (nMgdbVersion == 1 ? "" : nMgdbVersion) + "_.*")), "_id", Database.class, String.class);
     }
 
     /**

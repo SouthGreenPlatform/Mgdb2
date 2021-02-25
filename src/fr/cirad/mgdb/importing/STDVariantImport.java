@@ -143,7 +143,7 @@ public class STDVariantImport extends AbstractGenotypeImport {
             
 			fImportUnknownVariants = doesDatabaseSupportImportingUnknownVariants(sModule);
 			
-			cleanupBeforeImport(mongoTemplate, sModule, project, importMode, sRun);
+			cleanupBeforeImport(mongoTemplate, project, importMode, sRun);
 			
 			progress.addStep("Reading marker IDs");
 			progress.moveToNextStep();

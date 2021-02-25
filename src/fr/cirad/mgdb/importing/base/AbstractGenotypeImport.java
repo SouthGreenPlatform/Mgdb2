@@ -45,6 +45,7 @@ import org.springframework.data.mongodb.core.query.Update;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.client.result.DeleteResult;
 
+import fr.cirad.mgdb.model.mongo.maintypes.Assembly;
 import fr.cirad.mgdb.model.mongo.maintypes.DBVCFHeader;
 import fr.cirad.mgdb.model.mongo.maintypes.DBVCFHeader.VcfHeaderId;
 import fr.cirad.mgdb.model.mongo.maintypes.GenotypingProject;
@@ -66,6 +67,8 @@ public class AbstractGenotypeImport {
 	private static final Logger LOG = Logger.getLogger(AbstractGenotypeImport.class);
 
 	private boolean m_fAllowDbDropIfNoGenotypingData = true;
+    public boolean m_fCloseContextAfterImport = false;
+    public boolean m_fAllowNewAssembly = true;
 
 	/** String representing nucleotides considered as valid */
 	protected static HashSet<String> validNucleotides = new HashSet<>(Arrays.asList(new String[] {"a", "A", "t", "T", "g", "G", "c", "C"}));
@@ -83,8 +86,8 @@ public class AbstractGenotypeImport {
 		if (sSeq != null && nStartPos != null)
 			result.add(sType + "¤" + sSeq + "¤" + nStartPos);
 
-		if (result.size() == 0)
-			throw new Exception("Not enough info provided to build identification strings");
+//		if (result.size() == 0)
+//			throw new Exception("Not enough info provided to build identification strings");
 		
 		return result;
 	}
@@ -179,9 +182,8 @@ public class AbstractGenotypeImport {
         return existingVariantIDs;
 	}
 	
-	static public boolean doesDatabaseSupportImportingUnknownVariants(String sModule)
+	static public boolean doesDatabaseSupportImportingUnknownVariants(MongoTemplate mongoTemplate)
 	{
-		MongoTemplate mongoTemplate = MongoTemplateManager.get(sModule);
 		String firstId = null, lastId = null;
 		Query query = new Query(Criteria.where("_id").not().regex("^\\*.*"));
 		query.with(Sort.by(Arrays.asList(new Sort.Order(Sort.Direction.ASC, "_id"))));
@@ -214,13 +216,12 @@ public class AbstractGenotypeImport {
         }  
     }
     
-    protected void cleanupBeforeImport(MongoTemplate mongoTemplate, String sModule, GenotypingProject project, int importMode, String sRun) {
+    protected void cleanupBeforeImport(MongoTemplate mongoTemplate, GenotypingProject project, int importMode, String sRun) {
         if (importMode == 2)
             mongoTemplate.getDb().drop(); // drop database before importing
         else if (project != null)
         {
-			if (importMode == 1 || (project.getRuns().size() == 1 && project.getRuns().get(0).equals(sRun)))
-			{	// empty project data before importing
+			if (importMode == 1 || (project.getRuns().size() == 1 && project.getRuns().get(0).equals(sRun))) {	// empty project data before importing
 				DeleteResult dr = mongoTemplate.remove(new Query(Criteria.where("_id." + VcfHeaderId.FIELDNAME_PROJECT).is(project.getId())), DBVCFHeader.class);
 				if (dr.getDeletedCount() > 0)
 					LOG.info(dr.getDeletedCount() + " records removed from vcf_header");
@@ -232,8 +233,7 @@ public class AbstractGenotypeImport {
 					LOG.info(dr.getDeletedCount() + " samples were removed while cleaning up project " + project.getId() + "'s data");
 				mongoTemplate.remove(new Query(Criteria.where("_id").is(project.getId())), GenotypingProject.class);
 			}
-			else
-			{	// empty run data before importing
+			else {	// empty run data before importing
 				DeleteResult dr = mongoTemplate.remove(new Query(Criteria.where("_id." + VcfHeaderId.FIELDNAME_PROJECT).is(project.getId()).and("_id." + VcfHeaderId.FIELDNAME_RUN).is(sRun)), DBVCFHeader.class);
                 if (dr.getDeletedCount() > 0)
                 	LOG.info(dr.getDeletedCount() + " records removed from vcf_header");
@@ -253,8 +253,11 @@ public class AbstractGenotypeImport {
 
                 }
             }
-			if (Helper.estimDocCount(mongoTemplate,VariantRunData.class) == 0 && m_fAllowDbDropIfNoGenotypingData && doesDatabaseSupportImportingUnknownVariants(sModule))
-                mongoTemplate.getDb().drop();	// if there is no genotyping data left and we are not working on a fixed list of variants then any other data is irrelevant
+			if (Helper.estimDocCount(mongoTemplate, VariantRunData.class) == 0 && m_fAllowDbDropIfNoGenotypingData && doesDatabaseSupportImportingUnknownVariants(mongoTemplate)) { // if there is no genotyping data left and we are not working on a fixed list of variants then any other data is irrelevant
+				long nAssemblyCount = mongoTemplate.count(new Query(), Assembly.class);
+				if (nAssemblyCount == 0 || (nAssemblyCount == 1 && "".equals(mongoTemplate.findOne(new Query(), fr.cirad.mgdb.model.mongo.maintypes.Assembly.class).getName()))) // only remove the DB if no assembly names were specified
+					mongoTemplate.getDb().drop();
+			}
         }
 	}
     

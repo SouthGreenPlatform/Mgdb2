@@ -92,19 +92,38 @@ public class PlinkImport extends AbstractGenotypeImport {
 	}
 
 	/**
-     * Instantiates a new vcf import.
+     * Instantiates a new PLINK import.
      */
     public PlinkImport(boolean fCloseContextOpenAfterImport) {
         this();
     	m_fCloseContextOpenAfterImport = fCloseContextOpenAfterImport;
     }
+    
+    /**
+     * Instantiates a new PLINK import.
+     */
+    public PlinkImport(boolean fCloseContextAfterImport, boolean fAllowNewAssembly) {
+        this();
+    	m_fCloseContextAfterImport = fCloseContextAfterImport;
+    	m_fAllowNewAssembly = fAllowNewAssembly;
+    }
 
     /**
-     * Instantiates a new vcf import.
+     * Instantiates a new PLINK import.
      */
     public PlinkImport(String processID, boolean fCloseContextOpenAfterImport) {
         this(processID);
     	m_fCloseContextOpenAfterImport = fCloseContextOpenAfterImport;
+    }
+
+    
+    /**
+     * Instantiates a new PLINK import.
+     */
+    public PlinkImport(String processID, boolean fCloseContextAfterImport, boolean fAllowNewAssembly) {
+        this(processID);
+    	m_fCloseContextAfterImport = fCloseContextAfterImport;
+    	m_fAllowNewAssembly = fAllowNewAssembly;
     }
 
 	/**
@@ -183,11 +202,7 @@ public class PlinkImport extends AbstractGenotypeImport {
 					throw new Exception("DATASOURCE '" + sModule + "' is not supported!");
 			}
 			
-			Assembly assembly = mongoTemplate.findOne(new Query(Criteria.where(Assembly.FIELDNAME_NAME).is(assemblyName)), Assembly.class);
-			if (assembly == null)
-				throw new Exception("Assembly \"" + assemblyName + "\" not found in database. Supported assemblies are " + StringUtils.join(mongoTemplate.findDistinct(Assembly.FIELDNAME_NAME, Assembly.class, String.class), ", "));
-
-			fImportUnknownVariants = doesDatabaseSupportImportingUnknownVariants(sModule);			
+			fImportUnknownVariants = doesDatabaseSupportImportingUnknownVariants(mongoTemplate);			
 
 			if (m_processID == null)
 				m_processID = "IMPORT__" + sModule + "__" + sProject + "__" + sRun + "__" + System.currentTimeMillis();
@@ -197,7 +212,7 @@ public class PlinkImport extends AbstractGenotypeImport {
             if (importMode == 0 && project != null && project.getPloidyLevel() != 2)
             	throw new Exception("Ploidy levels differ between existing (" + project.getPloidyLevel() + ") and provided (" + 2 + ") data!");
             
-            cleanupBeforeImport(mongoTemplate, sModule, project, importMode, sRun);
+            cleanupBeforeImport(mongoTemplate, project, importMode, sRun);
 
 			Integer createdProject = null;
 			// create project if necessary
@@ -211,7 +226,21 @@ public class PlinkImport extends AbstractGenotypeImport {
 			}
 			project.setPloidyLevel(2);
 
-			HashMap<String, String> existingVariantIDs = buildSynonymToIdMapForExistingVariants(mongoTemplate, false, assembly.getId());			
+            HashMap<String, String> existingVariantIDs;
+			Assembly assembly = mongoTemplate.findOne(new Query(Criteria.where(Assembly.FIELDNAME_NAME).is(assemblyName)), Assembly.class);
+			if (assembly == null) {
+				if ("".equals(assemblyName) || m_fAllowNewAssembly) {
+					assembly = new Assembly("".equals(assemblyName) ? 0 : AutoIncrementCounter.getNextSequence(mongoTemplate, MongoTemplateManager.getMongoCollectionName(Assembly.class)));
+					assembly.setName(assemblyName);
+					mongoTemplate.save(assembly);
+					existingVariantIDs = new HashMap<>();
+				}
+				else
+					throw new Exception("Assembly \"" + assemblyName + "\" not found in database. Supported assemblies are " + StringUtils.join(mongoTemplate.findDistinct(Assembly.FIELDNAME_NAME, Assembly.class, String.class), ", "));
+			}
+			else
+				existingVariantIDs = buildSynonymToIdMapForExistingVariants(mongoTemplate, false, assembly.getId());
+		
 			
 			String info = "Loading variant list from MAP file";
 			LOG.info(info);
@@ -277,7 +306,7 @@ public class PlinkImport extends AbstractGenotypeImport {
 			{
 				scanner = new Scanner(tempFile);
 				long nPreviousProgressPercentage = -1;
-	            int nMaxChunkSize = existingVariantIDs.size() == 0 ? 10000 /*saved one by one*/ : 50000 /*inserted at once*/;
+				int nMaxChunkSize = existingVariantIDs.size() == 0 ? 10000 /*inserted at once*/ : 50000 /*saved one by one*/;
 				final MongoTemplate finalMongoTemplate = mongoTemplate;
 	            Thread asyncThread = null;
 				while (scanner.hasNextLine())

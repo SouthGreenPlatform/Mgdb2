@@ -78,9 +78,7 @@ public class VcfImport extends AbstractGenotypeImport {
     public static final String ANNOTATION_FIELDNAME_EFF = "EFF";
     public static final String ANNOTATION_FIELDNAME_ANN = "ANN";
     public static final String ANNOTATION_FIELDNAME_CSQ = "CSQ";
-    
-    public boolean m_fCloseContextOpenAfterImport = false;
-    
+        
     /**
      * The m_process id.
      */
@@ -96,9 +94,10 @@ public class VcfImport extends AbstractGenotypeImport {
     /**
      * Instantiates a new vcf import.
      */
-    public VcfImport(boolean fCloseContextOpenAfterImport) {
+    public VcfImport(boolean fCloseContextAfterImport, boolean fAllowNewAssembly) {
         this();
-    	m_fCloseContextOpenAfterImport = fCloseContextOpenAfterImport;
+    	m_fCloseContextAfterImport = fCloseContextAfterImport;
+    	m_fAllowNewAssembly = fAllowNewAssembly;
     }
 
     /**
@@ -113,9 +112,9 @@ public class VcfImport extends AbstractGenotypeImport {
     /**
      * Instantiates a new vcf import.
      */
-    public VcfImport(String processID, boolean fCloseContextOpenAfterImport) {
+    public VcfImport(String processID, boolean fCloseContextAfterImport) {
         this(processID);
-    	m_fCloseContextOpenAfterImport = fCloseContextOpenAfterImport;
+    	m_fCloseContextAfterImport = fCloseContextAfterImport;
     }
     
     /**
@@ -140,7 +139,7 @@ public class VcfImport extends AbstractGenotypeImport {
         } catch (Exception e) {
             LOG.warn("Unable to parse input mode. Using default (0): overwrite run if exists.");
         }
-        new VcfImport().importToMongo(args[4].toLowerCase().endsWith(".bcf"), args[0], args[1], args[2], args[3], new File(args[4]).toURI().toURL(), args[5], mode);        
+        new VcfImport(false, false).importToMongo(args[4].toLowerCase().endsWith(".bcf"), args[0], args[1], args[2], args[3], new File(args[4]).toURI().toURL(), args[5], mode);        
     }
 
     /**
@@ -217,7 +216,7 @@ public class VcfImport extends AbstractGenotypeImport {
             
             currentlyImportedProjects.put(sModule, sProject);
 
-            cleanupBeforeImport(mongoTemplate, sModule, project, importMode, sRun);
+            cleanupBeforeImport(mongoTemplate, project, importMode, sRun);
 
             VCFHeader header = (VCFHeader) reader.getHeader();
             int effectAnnotationPos = -1, geneIdAnnotationPos = -1;
@@ -254,19 +253,21 @@ public class VcfImport extends AbstractGenotypeImport {
             LOG.info(info);
             progress.addStep(info);
             progress.moveToNextStep();
-            
+
+            HashMap<String, String> existingVariantIDs;
 			Assembly assembly = mongoTemplate.findOne(new Query(Criteria.where(Assembly.FIELDNAME_NAME).is(assemblyName)), Assembly.class);
 			if (assembly == null) {
-				if ("".equals(assemblyName)) {
-					assembly = new Assembly(0);
+				if ("".equals(assemblyName) || m_fAllowNewAssembly) {
+					assembly = new Assembly("".equals(assemblyName) ? 0 : AutoIncrementCounter.getNextSequence(mongoTemplate, MongoTemplateManager.getMongoCollectionName(Assembly.class)));
 					assembly.setName(assemblyName);
 					mongoTemplate.save(assembly);
+					existingVariantIDs = new HashMap<>();
 				}
 				else
 					throw new Exception("Assembly \"" + assemblyName + "\" not found in database. Supported assemblies are " + StringUtils.join(mongoTemplate.findDistinct(Assembly.FIELDNAME_NAME, Assembly.class, String.class), ", "));
 			}
-
-            HashMap<String, String> existingVariantIDs = buildSynonymToIdMapForExistingVariants(mongoTemplate, false, assembly.getId());
+			else
+				existingVariantIDs = buildSynonymToIdMapForExistingVariants(mongoTemplate, false, assembly.getId());
 
             int nNumberOfVariantsToSaveAtOnce = 1;
             HashMap<String /*individual*/, GenotypingSample> previouslyCreatedSamples = new HashMap<String /*individual*/, GenotypingSample>();
@@ -283,7 +284,7 @@ public class VcfImport extends AbstractGenotypeImport {
             // loop over each variation
             long count = 0;
             String generatedIdBaseString = Long.toHexString(System.currentTimeMillis());
-            int nMaxChunkSize = existingVariantIDs.size() == 0 ? 10000 /*saved one by one*/ : 50000 /*inserted at once*/;
+            int nMaxChunkSize = existingVariantIDs.size() == 0 ? 10000 /*inserted at once*/ : 50000 /*saved one by one*/;
             Thread asyncThread = null;
             while (variantIterator.hasNext()) {
                 VariantContext vcfEntry = variantIterator.next();
@@ -387,7 +388,7 @@ public class VcfImport extends AbstractGenotypeImport {
         {
         	currentlyImportedProjects.remove(sModule);
 
-			if (m_fCloseContextOpenAfterImport && ctx != null)
+			if (m_fCloseContextAfterImport && ctx != null)
                 ctx.close();
 
             reader.close();
