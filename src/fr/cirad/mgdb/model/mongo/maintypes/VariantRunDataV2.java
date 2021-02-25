@@ -25,7 +25,7 @@ import org.springframework.data.annotation.TypeAlias;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
-import fr.cirad.mgdb.model.mongo.subtypes.AbstractVariantData;
+import fr.cirad.mgdb.model.mongo.subtypes.AbstractVariantDataV2;
 import fr.cirad.mgdb.model.mongo.subtypes.SampleGenotype;
 
 /**
@@ -34,7 +34,7 @@ import fr.cirad.mgdb.model.mongo.subtypes.SampleGenotype;
 @Document(collection = "variantRunData")
 @TypeAlias("R")
 
-public class VariantRunDataV2 extends AbstractVariantData
+public class VariantRunDataV2 extends AbstractVariantDataV2
 {
 	/** The Constant FIELDNAME_SAMPLEGENOTYPES. */
 	public final static String FIELDNAME_SAMPLEGENOTYPES = "sp";

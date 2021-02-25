@@ -293,6 +293,7 @@ public class MgdbDao
 				returnedFields = new ArrayList<String>();
 				returnedFields.add("_class");
 				returnedFields.add(VariantRunData.SECTION_ADDITIONAL_INFO);
+				returnedFields.add(VariantRunData.FIELDNAME_METADATA);
 				projectIdToReturnedRunFieldListMap.put(sample.getProjectId(), returnedFields);
 			}
 			returnedFields.add(VariantRunData.FIELDNAME_GENOTYPES + "." + sample.getId());
@@ -368,7 +369,7 @@ public class MgdbDao
 	/**
 	 * Gets the sample genotypes (for v2 model data)
 	 *
-	 * @param mongoTemplate the mongo template
+	 * @param mongoTemplate the MongoTemplate
 	 * @param variantFieldsToReturn the variant fields to return
 	 * @param projectIdToReturnedRunFieldListMap the project id to returned run field list map
 	 * @param variantIdListToRestrictTo the variant id list to restrict to

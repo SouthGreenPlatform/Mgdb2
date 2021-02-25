@@ -154,7 +154,7 @@ public class VariantData extends AbstractVariantData
  * @return the variant context
  * @throws Exception the exception
  */
-public VariantContext toVariantContext(Collection<VariantRunData> runs, Integer nAssemblyId,boolean exportVariantIDs, Collection<GenotypingSample> samplesToExport, Collection<String> individuals1, Collection<String> individuals2, HashMap<Integer, Object> previousPhasingIds, HashMap<String, Float> annotationFieldThresholds1, HashMap<String, Float> annotationFieldThresholds2, FileWriter warningFileWriter, Comparable synonym) throws Exception
+public VariantContext toVariantContext(Collection<VariantRunData> runs, Integer nAssemblyId, boolean exportVariantIDs, Collection<GenotypingSample> samplesToExport, Collection<String> individuals1, Collection<String> individuals2, HashMap<Integer, Object> previousPhasingIds, HashMap<String, Float> annotationFieldThresholds1, HashMap<String, Float> annotationFieldThresholds2, FileWriter warningFileWriter, Comparable synonym) throws Exception
 {
 	ArrayList<Genotype> genotypes = new ArrayList<Genotype>();
 	String sRefAllele = knownAlleleList.size() == 0 ? "" : knownAlleleList.get(0);
@@ -236,11 +236,12 @@ public VariantContext toVariantContext(Collection<VariantRunData> runs, Integer 
 			if (warningFileWriter != null && genotypeCounts.size() > 1)
 				warningFileWriter.write("- Dissimilar genotypes found for variant " + (synonym == null ? id : synonym) + ", individual " + individualName + ". Exporting most frequent: " + mostFrequentGenotype + "\n");
 			
-			GenotypingSample sample = samplesWithGivenGenotype.get(mostFrequentGenotype).get(0);	// any will do
+			GenotypingSample sample = samplesWithGivenGenotype.get(mostFrequentGenotype).get(0);	// any will do (FIXME: maybe not because gtPassesVcfAnnotationFilters gets invoked afterwards...)
 			
-			Object currentPhId = run.getMetadata().get(GT_FIELD_PHASED_ID).get(sample.getId());
+			HashMap<Integer, Object> phasingIDs = run.getMetadata().get(GT_FIELD_PHASED_ID);
+			Object currentPhId = phasingIDs == null ? null : phasingIDs.get(sample.getId());
 			
-			boolean isPhased = currentPhId != null && currentPhId.equals(previousPhasingIds.get(sample.getId()));
+			boolean isPhased = currentPhId != null && currentPhId.equals(previousPhasingIds.get(sample.getId()));	/*FIXME: check if this info is retrieved correctly*/
 
 			List<String> alleles = getAllelesFromGenotypeCode(isPhased ? (String) run.getMetadata().get(GT_FIELD_PHASED_GT).get(sample.getId()) : mostFrequentGenotype);
 			ArrayList<Allele> individualAlleles = new ArrayList<Allele>();
@@ -266,9 +267,10 @@ public VariantContext toVariantContext(Collection<VariantRunData> runs, Integer 
 				if (nPloidy == 0)
 					nPloidy = individualAlleles.size();
 				gb.phased(isPhased);
-				String genotypeFilters = (String) run.getMetadata().get(sample.getId()).get(FIELD_FILTERS);
-				if (genotypeFilters != null && genotypeFilters.length() > 0)
-					gb.filter(genotypeFilters);
+				/*FIXME: see if we can handle sample-level FT field (https://gatk.broadinstitute.org/hc/en-us/articles/360036484892-VariantFiltration) */
+//				String genotypeFilters = (String) run.getMetadata().get(sample.getId()).get(FIELD_FILTERS);
+//				if (genotypeFilters != null && genotypeFilters.length() > 0)
+//					gb.filter("genotypeFilters");
 			}
 			gtBuilders.put(sample, gb);
 		}
@@ -277,7 +279,7 @@ public VariantContext toVariantContext(Collection<VariantRunData> runs, Integer 
 			LOG.info("No alleles found for any sample in variant " + getId());
 		else 
 			individualLoop : for (GenotypingSample sample : gtBuilders.keySet()) {
-				GenotypeBuilder gb = gtBuilders.get(sample.getIndividual());
+				GenotypeBuilder gb = gtBuilders.get(sample/*.getIndividual()*/);
 				List<String> alleleListAtImportTimeIfDifferentFromNow = null;
 				for (String key : run.getMetadata().keySet())
 				{

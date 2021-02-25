@@ -48,7 +48,9 @@ import fr.cirad.mgdb.exporting.tools.AsyncExportTool;
 import fr.cirad.mgdb.exporting.tools.AsyncExportTool.AbstractDataOutputHandler;
 import fr.cirad.mgdb.model.mongo.maintypes.GenotypingSample;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantData;
+import fr.cirad.mgdb.model.mongo.maintypes.VariantDataV2;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantRunData;
+import fr.cirad.mgdb.model.mongo.maintypes.VariantRunDataV2;
 import fr.cirad.mgdb.model.mongo.subtypes.AbstractVariantData;
 import fr.cirad.mgdb.model.mongo.subtypes.ReferencePosition;
 import fr.cirad.mgdb.model.mongo.subtypes.SampleGenotype;
@@ -69,12 +71,12 @@ public abstract class AbstractIndividualOrientedExportHandler implements IExport
 	/** The individual oriented export handlers. */
 	static private TreeMap<String, AbstractIndividualOrientedExportHandler> individualOrientedExportHandlers = null;
 	
-	protected static Document projectionDoc(int nAssemblyId) {
-		return new Document(VariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(VariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId + "." + ReferencePosition.FIELDNAME_START_SITE, 1);	
+	protected static Document projectionDoc(Integer nAssemblyId) {
+		return new Document(VariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(VariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "")  + "." + ReferencePosition.FIELDNAME_START_SITE, 1);	
 	}
-	
-	protected static Document sortDoc(int nAssemblyId) {
-		return new Document(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId + "." + ReferencePosition.FIELDNAME_START_SITE, 1);
+
+	protected static Document sortDoc(Integer nAssemblyId) {
+		return new Document(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "")  + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "")  + "." + ReferencePosition.FIELDNAME_START_SITE, 1);
 	}
 	
 	/**
@@ -147,43 +149,73 @@ public abstract class AbstractIndividualOrientedExportHandler implements IExport
 		Number avgObjSize = (Number) mongoTemplate.getDb().runCommand(new Document("collStats", mongoTemplate.getCollectionName(VariantRunData.class))).get("avgObjSize");
 		int nQueryChunkSize = (int) Math.max(1, (nMaxChunkSizeInMb*1024*1024 / avgObjSize.doubleValue()) / AsyncExportTool.WRITING_QUEUE_CAPACITY);
 
-		AbstractDataOutputHandler<Integer, LinkedHashMap<VariantData, Collection<VariantRunData>>> dataOutputHandler = new AbstractDataOutputHandler<Integer, LinkedHashMap<VariantData, Collection<VariantRunData>>>() {				
+		AbstractDataOutputHandler<Integer, LinkedHashMap> dataOutputHandler = new AbstractDataOutputHandler<Integer, LinkedHashMap>() {				
 			@Override
 			public Void call() {
 				try
 				{
 					StringBuffer[] individualGenotypeBuffers = new StringBuffer[sortedIndList.size()];	// keeping all files open leads to failure (see ulimit command), keeping them closed and reopening them each time we need to write a genotype is too time consuming: so our compromise is to reopen them only once per chunk
-					for (VariantData variant : variantDataChunkMap.keySet())
-					{
+					for (Object variant : variantDataChunkMap.keySet()) {
+						String variantId = nAssemblyId == null ? ((VariantDataV2) variant).getId() : ((VariantData) variant).getId();
+						/*FIXME: handle synonyms?*/
+//		                if (markerSynonyms != null) {
+//		                	String syn = markerSynonyms.get(variantId);
+//		                    if (syn != null)
+//		                        variantId = syn;
+//		                }
+			                
 						if (progress.isAborted())
 							break;
 						
 						HashMap<String, List<String>> individualGenotypes = new HashMap<String, List<String>>();
-						
-						Collection<VariantRunData> runs = variantDataChunkMap.get(variant);
-						if (runs != null)
-							for (VariantRunData run : runs)
-								for (Integer sampleId : run.getGenotypes().keySet())
-								{
-									List<String> alleles = variant.getAllelesFromGenotypeCode(run.getGenotypes().get(sampleId));
-									String individualId = sampleIdToIndividualMap.get(sampleId);
 
-									if (!VariantData.gtPassesVcfAnnotationFilters(individualId, sampleId, run.getMetadata(), individuals1, annotationFieldThresholds, individuals2, annotationFieldThresholds2))
-										continue;	// skip genotype
+		                if (nAssemblyId == null) {
+			                Collection<VariantRunDataV2> runs = (Collection<VariantRunDataV2>) variantDataChunkMap.get((VariantDataV2) variant);
+			                if (runs != null)
+								for (VariantRunDataV2 run : runs)
+									for (Integer sampleId : run.getSampleGenotypes().keySet()) {
+										SampleGenotype sampleGenotype = run.getSampleGenotypes().get(sampleId);
+										List<String> alleles = ((VariantDataV2) variant).getAllelesFromGenotypeCode(sampleGenotype.getCode());
+										String individualId = sampleIdToIndividualMap.get(sampleId);
 
-									List<String> storedIndividualGenotypes = individualGenotypes.get(individualId);
-									if (storedIndividualGenotypes == null)
-									{
-										storedIndividualGenotypes = new ArrayList<String>();
-										individualGenotypes.put(individualId, storedIndividualGenotypes);
+										if (!VariantData.gtPassesVcfAnnotationFiltersV2(individualId, sampleGenotype, individuals1, annotationFieldThresholds, individuals2, annotationFieldThresholds2))
+											continue;	// skip genotype
+
+										List<String> storedIndividualGenotypes = individualGenotypes.get(individualId);
+										if (storedIndividualGenotypes == null) {
+											storedIndividualGenotypes = new ArrayList<String>();
+											individualGenotypes.put(individualId, storedIndividualGenotypes);
+										}
+
+										String sAlleles = StringUtils.join(alleles, ' ');
+										storedIndividualGenotypes.add(sAlleles);
 									}
+		                }
+		                else {
+			                Collection<VariantRunData> runs = (Collection<VariantRunData>) variantDataChunkMap.get((VariantData) variant);
+			                if (runs != null)
+								for (VariantRunData run : runs)
+									for (Integer sampleId : run.getGenotypes().keySet())
+									{
+										List<String> alleles = ((VariantData) variant).getAllelesFromGenotypeCode(run.getGenotypes().get(sampleId));
+										String individualId = sampleIdToIndividualMap.get(sampleId);
 
-									String sAlleles = StringUtils.join(alleles, ' ');
-									storedIndividualGenotypes.add(sAlleles);
-								}
+										if (!VariantData.gtPassesVcfAnnotationFilters(individualId, sampleId, run.getMetadata(), individuals1, annotationFieldThresholds, individuals2, annotationFieldThresholds2))
+											continue;	// skip genotype
 
-						for (int i=0; i<sortedIndList.size(); i++)
-						{
+										List<String> storedIndividualGenotypes = individualGenotypes.get(individualId);
+										if (storedIndividualGenotypes == null)
+										{
+											storedIndividualGenotypes = new ArrayList<String>();
+											individualGenotypes.put(individualId, storedIndividualGenotypes);
+										}
+
+										String sAlleles = StringUtils.join(alleles, ' ');
+										storedIndividualGenotypes.add(sAlleles);
+									}
+		                }
+
+						for (int i=0; i<sortedIndList.size(); i++) {
 							String individual = sortedIndList.get(i);
 							if (individualGenotypeBuffers[i] == null)
 								individualGenotypeBuffers[i] = new StringBuffer();	// we are about to write individual's first genotype for this chunk
@@ -192,25 +224,23 @@ public abstract class AbstractIndividualOrientedExportHandler implements IExport
 							if (storedIndividualGenotypes == null)
 								individualGenotypeBuffers[i].append(LINE_SEPARATOR);	// missing data
 							else
-								for (int j=0; j<storedIndividualGenotypes.size(); j++)
-								{
+								for (int j=0; j<storedIndividualGenotypes.size(); j++) {
 									String storedIndividualGenotype = storedIndividualGenotypes.get(j);
 									individualGenotypeBuffers[i].append(storedIndividualGenotype + (j == storedIndividualGenotypes.size() - 1 ? LINE_SEPARATOR : "|"));
 								}
 						}
 					}
-
+	
 					// write genotypes collected in this chunk to each individual's file
-					for (int i=0; i<sortedIndList.size(); i++)
-					{
+					for (int i=0; i<sortedIndList.size(); i++) {
 						String individual = sortedIndList.get(i);
 						BufferedOutputStream os = new BufferedOutputStream(new FileOutputStream(files.get(individual), true));
 						if (individualGenotypeBuffers[i] != null)
 							os.write(individualGenotypeBuffers[i].toString().getBytes());
-
+	
 						os.close();
 					}
-	            }
+				}
 				catch (Exception e)
 				{
 					if (progress.getError() == null)	// only log this once
