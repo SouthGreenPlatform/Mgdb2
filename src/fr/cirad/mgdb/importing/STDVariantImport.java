@@ -141,7 +141,7 @@ public class STDVariantImport extends AbstractGenotypeImport {
             if (importMode == 0 && project != null && project.getPloidyLevel() > 0 && project.getPloidyLevel() != m_ploidy)
             	throw new Exception("Ploidy levels differ between existing (" + project.getPloidyLevel() + ") and provided (" + m_ploidy + ") data!");
             
-			fImportUnknownVariants = doesDatabaseSupportImportingUnknownVariants(sModule);
+			fImportUnknownVariants = doesDatabaseSupportImportingUnknownVariants(mongoTemplate);
 			
 			cleanupBeforeImport(mongoTemplate, project, importMode, sRun);
 			
