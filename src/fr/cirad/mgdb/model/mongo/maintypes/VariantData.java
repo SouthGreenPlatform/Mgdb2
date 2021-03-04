@@ -333,7 +333,7 @@ public VariantContext toVariantContext(Collection<VariantRunData> runs, Integer 
 	String source = run == null ? null : (String) run.getAdditionalInfo().get(FIELD_SOURCE);
 
 	ReferencePosition referencePosition = referencePositions.get(nAssemblyId);
-	Long start = referencePosition == null ? null : referencePosition.getStartSite(), stop = referencePosition == null ? null : (referencePosition.getEndSite() == null ? start : referencePosition.getEndSite());
+	Long start = referencePosition == null ? null : referencePosition.getStartSite(), stop = referencePosition == null || referencePosition.getEndSite() == null ? (start + knownAlleleList.get(0).length() - 1) : referencePosition.getEndSite();
 	String chr = referencePosition == null ? null : referencePosition.getSequence();
 	VariantContextBuilder vcb = new VariantContextBuilder(source != null ? source : FIELDVAL_SOURCE_MISSING, chr != null ? chr : "", start != null ? start : 0, stop != null ? stop : 0, variantAlleles);
 	if (exportVariantIDs)
