@@ -166,6 +166,7 @@ public class PlinkImport extends AbstractGenotypeImport {
 	 * @param sTechnology the technology
 	 * @param mapFileURL the map file URL
 	 * @param pedFile the ped file
+     * @param assemblyName the assembly name
 	 * @param importMode the import mode
 	 * @return a project ID if it was created by this method, otherwise null
 	 * @throws Exception the exception
