@@ -53,14 +53,6 @@ public abstract class AbstractMarkerOrientedExportHandler implements IExportHand
 	/** The marker oriented export handlers. */
 	static private TreeMap<String, AbstractMarkerOrientedExportHandler> markerOrientedExportHandlers = null;
 
-	protected static Document projectionDoc(Integer nAssemblyId) {
-		return new Document(VariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(VariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "")  + "." + ReferencePosition.FIELDNAME_START_SITE, 1);	
-	}
-
-	protected static Document sortDoc(Integer nAssemblyId) {
-		return new Document(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "")  + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "")  + "." + ReferencePosition.FIELDNAME_START_SITE, 1);
-	}
-
 	/**
 	 * Export data.
 	 *

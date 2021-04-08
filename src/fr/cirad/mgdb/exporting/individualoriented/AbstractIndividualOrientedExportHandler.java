@@ -70,15 +70,7 @@ public abstract class AbstractIndividualOrientedExportHandler implements IExport
 	
 	/** The individual oriented export handlers. */
 	static private TreeMap<String, AbstractIndividualOrientedExportHandler> individualOrientedExportHandlers = null;
-	
-	protected static Document projectionDoc(Integer nAssemblyId) {
-		return new Document(VariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(VariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "")  + "." + ReferencePosition.FIELDNAME_START_SITE, 1);	
-	}
-
-	protected static Document sortDoc(Integer nAssemblyId) {
-		return new Document(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "")  + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "")  + "." + ReferencePosition.FIELDNAME_START_SITE, 1);
-	}
-	
+		
 	/**
 	 * Export data.
 	 *
@@ -113,7 +105,7 @@ public abstract class AbstractIndividualOrientedExportHandler implements IExport
 	 * @return a map providing one File per individual
 	 * @throws Exception the exception
 	 */
-	public TreeMap<String, File> createExportFiles(String sModule, Integer nAssemblyId,MongoCollection<Document> varColl, Document varQuery, Collection<GenotypingSample> samples1, Collection<GenotypingSample> samples2, String exportID, HashMap<String, Float> annotationFieldThresholds, HashMap<String, Float> annotationFieldThresholds2, List<GenotypingSample> samplesToExport, final ProgressIndicator progress) throws Exception
+	public TreeMap<String, File> createExportFiles(String sModule, Integer nAssemblyId, MongoCollection<Document> varColl, Document varQuery, Collection<GenotypingSample> samples1, Collection<GenotypingSample> samples2, String exportID, HashMap<String, Float> annotationFieldThresholds, HashMap<String, Float> annotationFieldThresholds2, List<GenotypingSample> samplesToExport, final ProgressIndicator progress) throws Exception
 	{
 		long before = System.currentTimeMillis();
 
@@ -252,7 +244,7 @@ public abstract class AbstractIndividualOrientedExportHandler implements IExport
 		};
 
 		long markerCount = varColl.countDocuments(varQuery);
-		try (MongoCursor<Document> markerCursor = varColl.find(varQuery).projection(projectionDoc(nAssemblyId)).sort(sortDoc(nAssemblyId)).noCursorTimeout(true).collation(collationObj).batchSize(nQueryChunkSize).iterator()) {
+		try (MongoCursor<Document> markerCursor = IExportHandler.getMarkerCursorWithCorrectCollation(varColl, varQuery, nAssemblyId, nQueryChunkSize)) {
 			AsyncExportTool asyncExportTool = new AsyncExportTool(markerCursor, markerCount, nQueryChunkSize, mongoTemplate, samplesToExport, dataOutputHandler, progress);
 			asyncExportTool.launch();
 	
