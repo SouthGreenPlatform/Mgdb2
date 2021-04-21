@@ -197,8 +197,8 @@ public interface IExportHandler
 //		long timeReading = 0;
 		while (markerCursor.hasNext()) {
 //			System.out.println("reading " + nWrittenVariantCount);
-			long b4r = System.currentTimeMillis();
-            if (progress.isAborted()) {
+//			long b4r = System.currentTimeMillis();
+            if (progress.isAborted() && warningFileWriter != null) {
                 warningFileWriter.close();
 			    break;
             }
