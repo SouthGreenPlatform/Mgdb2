@@ -17,7 +17,12 @@
 package fr.cirad.mgdb.model.mongo.maintypes;
 
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
+import org.bson.codecs.pojo.annotations.BsonProperty;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.TypeAlias;
 //import org.springframework.data.mongodb.core.index.CompoundIndex;
@@ -25,14 +30,16 @@ import org.springframework.data.annotation.TypeAlias;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import fr.cirad.mgdb.model.mongo.subtypes.AbstractVariantData;
+import fr.cirad.mgdb.model.mongo.subtypes.ReferencePosition;
 
 /**
  * The Class VariantRunData.
  */
 @Document(collection = "variantRunData")
 @TypeAlias("R")
-
 public class VariantRunData extends AbstractVariantData
 {
 //	/** The Constant FIELDNAME_SAMPLEGENOTYPES. */
@@ -66,15 +73,24 @@ public class VariantRunData extends AbstractVariantData
 
 		/** The project id. */
 		@Field(FIELDNAME_PROJECT_ID)
+		@BsonProperty(FIELDNAME_PROJECT_ID)     
 		private int projectId;
 
 		/** The run name. */
 		@Field(FIELDNAME_RUNNAME)
+		@BsonProperty(FIELDNAME_RUNNAME)
 		private String runName;
 
 		/** The variant id. */
 		@Field(FIELDNAME_VARIANT_ID)
+		@BsonProperty(FIELDNAME_VARIANT_ID)
 		private String variantId;
+
+		/**
+		 * Instantiates a new variant run data id.
+		 */
+		public VariantRunDataId() {
+		}
 
 		/**
 		 * Instantiates a new variant run data id.
@@ -86,6 +102,18 @@ public class VariantRunData extends AbstractVariantData
 		public VariantRunDataId(int projectId, String runName, String variantId) {
 			this.projectId = projectId;
 			this.runName = runName.intern();
+			this.variantId = variantId;
+		}
+		
+		public void setProjectId(int projectId) {
+			this.projectId = projectId;
+		}
+
+		public void setRunName(String runName) {
+			this.runName = runName;
+		}
+
+		public void setVariantId(String variantId) {
 			this.variantId = variantId;
 		}
 
@@ -143,6 +171,7 @@ public class VariantRunData extends AbstractVariantData
 
 	/** The id. */
 	@Id
+	@BsonProperty("_id")
 	private VariantRunDataId id;
 
 //	/** The sample genotypes. */
@@ -150,17 +179,15 @@ public class VariantRunData extends AbstractVariantData
 //	private HashMap<Integer, SampleGenotype> sampleGenotypes = new HashMap<Integer, SampleGenotype>();
 	
 	/** The genotypes. */
+	@BsonProperty(FIELDNAME_GENOTYPES)
 	@Field(FIELDNAME_GENOTYPES)
 	private HashMap<Integer, String> genotypes = new HashMap<>();
 	
 	/** The metadata. */
+	@BsonProperty(FIELDNAME_METADATA)
 	@Field(FIELDNAME_METADATA)
 	private HashMap<String, HashMap<Integer, Object>> metadata = new HashMap<>();
 	
-//	/** The data. */
-//	@Field(FIELDNAME_DATA)
-//	private HashMap<String, Object> data = new HashMap<>();
-
 	/**
 	 * Instantiates a new variant run data.
 	 */
@@ -219,40 +246,10 @@ public class VariantRunData extends AbstractVariantData
 		this.metadata = metadata;
 	}
 
-//	public HashMap<String, Object> getData() {
-//		return data;
-//	}
-//
-//	public void setData(HashMap<String, Object> data) {
-//		this.data = data;
-//	}
-	
-//	public HashMap<Integer, SampleGenotype> getSampleGenotypes() {
-//		return sampleGenotypes;
-//	}
-
 	public void setSampleGenotype(int nSampleId, String sGtCode) {
 		genotypes.put(nSampleId, sGtCode);
 	}
 
-//	public void setSampleGenotype2(int nSampleId, String sGtCode) {
-//		HashMap<Object, Object> spInfo = metadata.get(nSampleId);
-//		if (spInfo == null) {
-//			spInfo = new HashMap<>();
-//			metadata.put(nSampleId, spInfo);
-//		}
-//		spInfo.put(FIELDNAME_GENOTYPES, sGtCode);
-//	}
-//	
-//	public void setSampleGenotype3(int nSampleId, String sGtCode) {
-//		HashMap<Object, Object> spInfo = metadata.get(nSampleId);
-//		if (spInfo == null) {
-//			spInfo = new HashMap<>();
-//			metadata.put(nSampleId, spInfo);
-//		}
-//		spInfo.put(FIELDNAME_GENOTYPES, sGtCode);
-//	}
-	
 	/* (non-Javadoc)
 	 * @see java.lang.Object#equals(java.lang.Object)
 	 */
@@ -285,6 +282,4 @@ public class VariantRunData extends AbstractVariantData
 
 		return getId().toString();
 	}
-	
-
 }

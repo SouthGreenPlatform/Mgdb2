@@ -18,6 +18,7 @@ package fr.cirad.mgdb.model.mongo.maintypes;
 
 import java.util.HashMap;
 
+import org.bson.codecs.pojo.annotations.BsonProperty;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.TypeAlias;
 //import org.springframework.data.mongodb.core.index.CompoundIndex;
@@ -33,7 +34,6 @@ import fr.cirad.mgdb.model.mongo.subtypes.SampleGenotype;
  */
 @Document(collection = "variantRunData")
 @TypeAlias("R")
-
 public class VariantRunDataV2 extends AbstractVariantDataV2
 {
 	/** The Constant FIELDNAME_SAMPLEGENOTYPES. */
@@ -60,16 +60,25 @@ public class VariantRunDataV2 extends AbstractVariantDataV2
 		public final static String FIELDNAME_VARIANT_ID = "vi";
 
 		/** The project id. */
+		@BsonProperty(FIELDNAME_PROJECT_ID)
 		@Field(FIELDNAME_PROJECT_ID)
 		private int projectId;
 
 		/** The run name. */
+		@BsonProperty(FIELDNAME_RUNNAME)
 		@Field(FIELDNAME_RUNNAME)
 		private String runName;
 
 		/** The variant id. */
+		@BsonProperty(FIELDNAME_VARIANT_ID)
 		@Field(FIELDNAME_VARIANT_ID)
 		private String variantId;
+
+		/**
+		 * Instantiates a new variant run data id.
+		 */
+		public VariantRunDataId() {
+		}
 
 		/**
 		 * Instantiates a new variant run data id.
@@ -81,6 +90,18 @@ public class VariantRunDataV2 extends AbstractVariantDataV2
 		public VariantRunDataId(int projectId, String runName, String variantId) {
 			this.projectId = projectId;
 			this.runName = runName.intern();
+			this.variantId = variantId;
+		}
+
+		public void setProjectId(int projectId) {
+			this.projectId = projectId;
+		}
+
+		public void setRunName(String runName) {
+			this.runName = runName;
+		}
+
+		public void setVariantId(String variantId) {
 			this.variantId = variantId;
 		}
 
@@ -137,10 +158,12 @@ public class VariantRunDataV2 extends AbstractVariantDataV2
 	}
 
 	/** The id. */
+	@BsonProperty("_id")
 	@Id
 	private VariantRunDataId id;
 
 	/** The sample genotypes. */
+	@BsonProperty(FIELDNAME_SAMPLEGENOTYPES)
 	@Field(FIELDNAME_SAMPLEGENOTYPES)
 	private HashMap<Integer, SampleGenotype> sampleGenotypes = new HashMap<Integer, SampleGenotype>();
 

@@ -38,6 +38,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import org.bson.Document;
+import org.bson.codecs.pojo.annotations.BsonProperty;
 import org.springframework.data.mongodb.core.mapping.Field;
 
 import fr.cirad.mgdb.model.mongo.maintypes.GenotypingSample;
@@ -120,26 +121,32 @@ abstract public class AbstractVariantDataV2
 	protected Object id;
 	
 	/** The type. */
+	@BsonProperty(FIELDNAME_TYPE)
 	@Field(FIELDNAME_TYPE)
 	private String type;
 
 	/** The reference position. */
+	@BsonProperty(FIELDNAME_REFERENCE_POSITION)
 	@Field(FIELDNAME_REFERENCE_POSITION)
 	ReferencePosition referencePosition = null;
 	
 	/** The synonyms. */
+	@BsonProperty(FIELDNAME_SYNONYMS)
 	@Field(FIELDNAME_SYNONYMS)
 	private TreeMap<String /*synonym type*/, TreeSet<String>> synonyms;
 
 	/** The analysis methods. */
+	@BsonProperty(FIELDNAME_ANALYSIS_METHODS)
 	@Field(FIELDNAME_ANALYSIS_METHODS)
 	private TreeSet<String> analysisMethods = null;
 
 	/** The known allele list. */
+	@BsonProperty(FIELDNAME_KNOWN_ALLELE_LIST)
 	@Field(FIELDNAME_KNOWN_ALLELE_LIST)
 	private List<String> knownAlleleList;
 
 	/** The additional info. */
+	@BsonProperty(SECTION_ADDITIONAL_INFO)
 	@Field(SECTION_ADDITIONAL_INFO)
 	private HashMap<String, Object> additionalInfo = null;
 

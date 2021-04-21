@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 import org.apache.log4j.Logger;
 import org.bson.Document;
@@ -35,9 +36,11 @@ import org.springframework.data.mongodb.core.query.Query;
 import com.mongodb.BasicDBObject;
 import com.mongodb.MongoCommandException;
 import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoCursor;
 import com.mongodb.client.result.DeleteResult;
 
 import fr.cirad.mgdb.model.mongo.maintypes.CachedCount;
+import fr.cirad.mgdb.model.mongo.maintypes.DBVCFHeader;
 import fr.cirad.mgdb.model.mongo.maintypes.GenotypingProject;
 import fr.cirad.mgdb.model.mongo.maintypes.GenotypingSample;
 import fr.cirad.mgdb.model.mongo.maintypes.Individual;
@@ -46,8 +49,12 @@ import fr.cirad.mgdb.model.mongo.maintypes.VariantDataV2;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantRunData;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantRunData.VariantRunDataId;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantRunDataV2;
+import fr.cirad.mgdb.model.mongo.maintypes.DBVCFHeader.VcfHeaderId;
 import fr.cirad.mgdb.model.mongo.subtypes.ReferencePosition;
 import fr.cirad.tools.mongo.MongoTemplateManager;
+import htsjdk.variant.vcf.VCFFormatHeaderLine;
+import htsjdk.variant.vcf.VCFHeaderLineCount;
+import htsjdk.variant.vcf.VCFHeaderLineType;
 
 /**
  * The Class MgdbDao.
@@ -293,7 +300,7 @@ public class MgdbDao
 				returnedFields = new ArrayList<String>();
 				returnedFields.add("_class");
 				returnedFields.add(VariantRunData.SECTION_ADDITIONAL_INFO);
-				returnedFields.add(VariantRunData.FIELDNAME_METADATA);
+				returnedFields.add(VariantRunData.FIELDNAME_METADATA);	/* FIXME: inefficient, use MgdbDao.getAnnotationFields() if this code survives */
 				projectIdToReturnedRunFieldListMap.put(sample.getProjectId(), returnedFields);
 			}
 			returnedFields.add(VariantRunData.FIELDNAME_GENOTYPES + "." + sample.getId());
@@ -317,10 +324,13 @@ public class MgdbDao
 	 */
 	public static List<Individual> getIndividualsFromSamples(final String sModule, final Collection<GenotypingSample> samples)
 	{
-		MongoTemplate mongoTemplate = MongoTemplateManager.get(sModule);
-		ArrayList<Individual> result = new ArrayList<Individual>();
+		MongoTemplate mongoTemplate = MongoTemplateManager.get(sModule);		
+		HashMap<String, Individual> individualsById = new HashMap<>();
+		for (Individual ind : mongoTemplate.find(new Query(Criteria.where("_id").in(samples.stream().map(sp -> sp.getIndividual()).toArray())), Individual.class))
+			individualsById.put(ind.getId(), ind);
+		ArrayList<Individual> result = new ArrayList<>();
 		for (GenotypingSample sp : samples)
-			result.add(mongoTemplate.findById(sp.getIndividual(), Individual.class));
+			result.add(individualsById.get(sp.getIndividual()));
 		return result;
 	}
 	
@@ -479,4 +489,25 @@ public class MgdbDao
 		
 		return result;
 	}
+	
+	public static TreeSet<String> getAnnotationFields(MongoTemplate mongoTemplate, int projId, boolean fOnlySearchableFields) {
+    	TreeSet<String> result = new TreeSet<>();
+
+        // we can't use Spring queries here (leads to "Failed to instantiate htsjdk.variant.vcf.VCFInfoHeaderLine using constructor NO_CONSTRUCTOR with arguments")
+		MongoCollection<org.bson.Document> vcfHeaderColl = mongoTemplate.getCollection(MongoTemplateManager.getMongoCollectionName(DBVCFHeader.class));
+		Document vcfHeaderQuery = new Document("_id." + VcfHeaderId.FIELDNAME_PROJECT, projId);
+		MongoCursor<Document> headerCursor = vcfHeaderColl.find(vcfHeaderQuery).iterator();
+
+		while (headerCursor.hasNext())
+		{
+			DBVCFHeader vcfHeader = DBVCFHeader.fromDocument(headerCursor.next());
+        	for (String key : vcfHeader.getmFormatMetaData().keySet()) {
+        		VCFFormatHeaderLine vcfFormatHeaderLine = vcfHeader.getmFormatMetaData().get(key);
+        		if (!fOnlySearchableFields || (vcfFormatHeaderLine.getType().equals(VCFHeaderLineType.Integer) && vcfFormatHeaderLine.getCountType() == VCFHeaderLineCount.INTEGER && vcfFormatHeaderLine.getCount() == 1))
+        			result.add(key);
+        	}
+		}
+		headerCursor.close();
+        return result;
+    }
 }

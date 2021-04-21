@@ -16,10 +16,21 @@
  *******************************************************************************/
 package fr.cirad.mgdb.exporting;
 
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.log4j.Logger;
 import org.bson.Document;
+import org.bson.codecs.configuration.CodecRegistries;
+import org.bson.codecs.configuration.CodecRegistry;
+import org.bson.codecs.pojo.IntKeyMapPropertyCodecProvider;
+import org.bson.codecs.pojo.PojoCodecProvider;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Order;
 import org.springframework.data.mongodb.UncategorizedMongoDbException;
@@ -27,6 +38,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
 
 import com.mongodb.BasicDBObject;
+import com.mongodb.MongoClientSettings;
 import com.mongodb.MongoCommandException;
 import com.mongodb.MongoQueryException;
 import com.mongodb.client.MongoCollection;
@@ -36,8 +48,12 @@ import com.mongodb.client.model.IndexOptions;
 
 import fr.cirad.mgdb.model.mongo.maintypes.VariantData;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantDataV2;
+import fr.cirad.mgdb.model.mongo.maintypes.VariantRunData;
+import fr.cirad.mgdb.model.mongo.maintypes.VariantRunDataV2;
 import fr.cirad.mgdb.model.mongo.subtypes.AbstractVariantData;
+import fr.cirad.mgdb.model.mongo.subtypes.AbstractVariantDataV2;
 import fr.cirad.mgdb.model.mongo.subtypes.ReferencePosition;
+import fr.cirad.tools.ProgressIndicator;
 
 /**
  * The Interface IExportHandler.
@@ -50,10 +66,12 @@ public interface IExportHandler
 //	static final Document projectionDoc = new Document(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + "." + ReferencePosition.FIELDNAME_START_SITE, 1);	
 //	static final Document sortDoc = new Document(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + "." + ReferencePosition.FIELDNAME_START_SITE, 1);
 	
-	static Document projectionDoc(Integer nAssemblyId) {
-		String posPath = nAssemblyId != null ? (VariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId) : VariantDataV2.FIELDNAME_REFERENCE_POSITION;
-		return new Document(posPath + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(posPath  + "." + ReferencePosition.FIELDNAME_START_SITE, 1);	
-	}
+//	static Document projectionDoc(Integer nAssemblyId) {
+//		String posPath = nAssemblyId != null ? (VariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId) : VariantDataV2.FIELDNAME_REFERENCE_POSITION;
+//		return new Document(posPath + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(posPath  + "." + ReferencePosition.FIELDNAME_START_SITE, 1);	
+//	}
+
+	static final CodecRegistry pojoCodecRegistry = CodecRegistries.fromRegistries(MongoClientSettings.getDefaultCodecRegistry(), CodecRegistries.fromProviders(PojoCodecProvider.builder().register(new IntKeyMapPropertyCodecProvider()).automatic(true).build()));
 
 	static Document sortDoc(Integer nAssemblyId) {
 		String posPath = nAssemblyId != null ? (VariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId) : VariantDataV2.FIELDNAME_REFERENCE_POSITION;
@@ -130,7 +148,8 @@ public interface IExportHandler
 				LOG.info("Creating position index with collation en_US on variants collection");
 				
 				MongoCollection<Document> varColl = mongoTemplate.getCollection(varCollName);
-				BasicDBObject indexKeys = new BasicDBObject(VariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(VariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_START_SITE, 1);
+				String rpPath = nAssemblyId == null ? AbstractVariantDataV2.FIELDNAME_REFERENCE_POSITION : AbstractVariantData.FIELDNAME_REFERENCE_POSITION;
+				BasicDBObject indexKeys = new BasicDBObject(rpPath + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(rpPath + (nAssemblyId != null ? "." + nAssemblyId : "") + "." +  ReferencePosition.FIELDNAME_START_SITE, 1);
 				try {
 					varColl.dropIndex(indexKeys);	// it probably exists without the collation
 				}
@@ -144,27 +163,90 @@ public interface IExportHandler
 			throw umde;
 		}
 	}
-	
-	public static MongoCursor<Document> getMarkerCursorWithCorrectCollation(MongoCollection<Document> varColl, Document varQuery, Integer nAssemblyId, int nQueryChunkSize) {
+
+	public static MongoCursor<Document> getMarkerCursorWithCorrectCollation(MongoCollection<Document> varColl, Class resultType, Document varQuery, Document projection, Integer nAssemblyId, int nQueryChunkSize) {
 		try {
-			return varColl.find(varQuery).projection(projectionDoc(nAssemblyId)).sort(sortDoc(nAssemblyId)).noCursorTimeout(true).collation(collationObj).batchSize(nQueryChunkSize).iterator();
+			return varColl.find(varQuery, resultType).projection(projection).collation(collationObj).sort(sortDoc(nAssemblyId)).batchSize(nQueryChunkSize).noCursorTimeout(true).iterator();
 		}
 		catch (MongoQueryException mqe) {
 			if (mqe.getMessage().contains("Add an index")) {
 				LOG.info("Creating position index with collation en_US on variants collection");
 				
-				BasicDBObject indexKeys = new BasicDBObject(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(AbstractVariantData.FIELDNAME_REFERENCE_POSITION + "." + ReferencePosition.FIELDNAME_START_SITE, 1);
+				String rpPath = nAssemblyId == null ? AbstractVariantDataV2.FIELDNAME_REFERENCE_POSITION : AbstractVariantData.FIELDNAME_REFERENCE_POSITION;				
+				BasicDBObject indexKeys = new BasicDBObject(rpPath + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(rpPath + (nAssemblyId != null ? "." + nAssemblyId : "") + "." +  ReferencePosition.FIELDNAME_START_SITE, 1);
 				try {
 					varColl.dropIndex(indexKeys);	// it probably exists without the collation
 				}
 				catch (MongoCommandException ignored)
 				{}
 				
-				varColl.createIndex(indexKeys, new IndexOptions().collation(Collation.builder().locale("en_US").numericOrdering(true).build()));
+				varColl.createIndex(indexKeys, new IndexOptions().collation(collationObj));
 				
-				return varColl.find(varQuery).projection(projectionDoc(nAssemblyId)).sort(sortDoc(nAssemblyId)).noCursorTimeout(true).collation(collationObj).batchSize(nQueryChunkSize).iterator();
+				return varColl.find(varQuery, resultType).projection(projection).collation(collationObj).sort(sortDoc(nAssemblyId)).batchSize(nQueryChunkSize).noCursorTimeout(true).iterator();
 			}
 			throw mqe;
 		}
 	}
+	
+    static void readAndWrite(MongoCursor markerCursor, ProgressIndicator progress, FileWriter warningFileWriter, boolean fV2Model, int nQueryChunkSize, LinkedHashMap<String, List<Object>> markerRunsToWrite, Thread writingThread, long variantCount) throws IOException, InterruptedException, ExecutionException {
+		CompletableFuture<Void> future = null;
+		LinkedHashMap<String, List<Object>> tempMarkerRunsToWrite = new LinkedHashMap<>();
+		List<Object> currentMarkerRuns = new ArrayList<>();
+		String varId = null, previousVarId = null;
+		int nWrittenVariantCount = 0;
+//		long timeReading = 0;
+		while (markerCursor.hasNext()) {
+//			System.out.println("reading " + nWrittenVariantCount);
+			long b4r = System.currentTimeMillis();
+            if (progress.isAborted()) {
+                warningFileWriter.close();
+			    break;
+            }
+            
+			Object aRun = markerCursor.next();
+			if (fV2Model) {
+				VariantRunDataV2 vrd = (VariantRunDataV2) aRun;
+				varId = vrd.getId().getVariantId();
+			}
+			else {
+				VariantRunData vrd = (VariantRunData) aRun;
+				varId = vrd.getId().getVariantId();
+			}
+			
+			if (previousVarId != null && varId != previousVarId) {
+				tempMarkerRunsToWrite.put(previousVarId, currentMarkerRuns);
+				currentMarkerRuns = new ArrayList<>();
+			}
+			
+			currentMarkerRuns.add(aRun);
+
+			if (!markerCursor.hasNext())
+				tempMarkerRunsToWrite.put(varId, currentMarkerRuns);
+
+//			long duration = System.currentTimeMillis() - b4r;
+//			timeReading += duration;
+//			System.out.println("read " + nWrittenVariantCount + " in " + duration + "ms");
+
+			if (tempMarkerRunsToWrite.size() >= nQueryChunkSize || !markerCursor.hasNext()) {
+				if (future != null && !future.isDone()) {
+//					long b4 = System.currentTimeMillis();
+					future.get();
+//					long delay = System.currentTimeMillis() - b4;
+//					if (delay > 100)
+//						LOG.debug(progress.getProcessId() + " waited " + delay + "ms before writing variant " + nWrittenVariantCount);
+				}
+
+				markerRunsToWrite.putAll(tempMarkerRunsToWrite);	// only do this when previous execution has completed, to avoid ConcurrentModificationException
+				tempMarkerRunsToWrite.clear();
+				future = CompletableFuture.runAsync(writingThread);
+//				writingThread.run();
+			}
+			
+			previousVarId = varId;
+			progress.setCurrentStepProgress(++nWrittenVariantCount * 100l / variantCount);
+		}
+		if (future != null && !future.isDone())
+			future.get();
+//		System.out.println("time spent reading: " + timeReading);
+    }
 }

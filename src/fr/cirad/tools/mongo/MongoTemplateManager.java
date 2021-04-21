@@ -17,13 +17,10 @@
 package fr.cirad.tools.mongo;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,12 +30,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.MissingResourceException;
-import java.util.Properties;
 import java.util.ResourceBundle;
 import java.util.ResourceBundle.Control;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.TreeSet;
 
 import org.apache.log4j.Logger;
 import org.springframework.beans.BeansException;
@@ -51,28 +46,17 @@ import org.springframework.data.mongodb.core.convert.MappingMongoConverter;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
-import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mongodb.BasicDBObject;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
-import com.mongodb.client.result.UpdateResult;
 import com.mongodb.connection.ServerDescription;
 
-import fr.cirad.mgdb.model.mongo.maintypes.Assembly;
 import fr.cirad.mgdb.model.mongo.maintypes.Database;
-import fr.cirad.mgdb.model.mongo.maintypes.GenotypingProject;
 import fr.cirad.tools.AppConfig;
 import fr.cirad.tools.Helper;
-//import fr.cirad.tools.mongo.MongoTemplateManager.ModuleAction;
-import htsjdk.tribble.index.Index;
-import htsjdk.tribble.index.tabix.TabixFormat;
-import htsjdk.tribble.index.tabix.TabixIndexCreator;
-import htsjdk.variant.variantcontext.Allele;
-import htsjdk.variant.variantcontext.VariantContext;
-import htsjdk.variant.variantcontext.VariantContextBuilder;
 
 /**
  * The Class MongoTemplateManager.
@@ -281,7 +265,7 @@ public class MongoTemplateManager implements ApplicationContextAware {
 //        hiddenDatabases.clear();
 //        try {
             mongoClients = applicationContext.getBeansOfType(MongoClient.class);
-            
+
             commonsTemplate = applicationContext.getBeansOfType(MongoTemplate.class).get("commonsTemplate");
 //            commonsTemplate.dropCollection(Database.class);	/*FIXME: remove me after tests*/
 

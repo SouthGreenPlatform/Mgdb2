@@ -16,6 +16,7 @@
  *******************************************************************************/
 package fr.cirad.mgdb.model.mongo.subtypes;
 
+import org.bson.codecs.pojo.annotations.BsonProperty;
 import org.springframework.data.mongodb.core.mapping.Field;
 
 /**
@@ -34,21 +35,24 @@ public class ReferencePosition
 	public final static String FIELDNAME_END_SITE = "es";
 
 	/** The sequence. */
+	@BsonProperty(FIELDNAME_SEQUENCE)
 	@Field(FIELDNAME_SEQUENCE)
 	private String sequence;
 	
 	/** The start site. */
+	@BsonProperty(FIELDNAME_START_SITE)
 	@Field(FIELDNAME_START_SITE)
 	private long startSite;
 	
 	/** The end site. */
+	@BsonProperty(FIELDNAME_END_SITE)
 	@Field(FIELDNAME_END_SITE)
 	private Long endSite = null;
 	
 	/**
 	 * Instantiates a new reference position.
 	 */
-	private ReferencePosition()
+	public ReferencePosition()
 	{		
 	}
 	

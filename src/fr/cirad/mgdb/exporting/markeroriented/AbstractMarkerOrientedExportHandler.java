@@ -58,12 +58,14 @@ public abstract class AbstractMarkerOrientedExportHandler implements IExportHand
 	 *
 	 * @param outputStream the output stream
 	 * @param sModule the module
+	 * @param projId the project ID
 	 * @param nAssemblyId ID of the assembly to work with
 	 * @param sampleIDs1 the sample ids for group 1
 	 * @param sampleIDs2 the sample ids for group 2
 	 * @param progress the progress
 	 * @param varColl the variant collection (main or temp)
 	 * @param varQuery query to apply on varColl
+	 * @param variantCount number of variants to export
 	 * @param markerSynonyms the marker synonyms
 	 * @param nMinimumReadDepth the n minimum read depth
 	 * @param annotationFieldThresholds the annotation field thresholds for group 1
@@ -72,7 +74,7 @@ public abstract class AbstractMarkerOrientedExportHandler implements IExportHand
 	 * @param readyToExportFiles files to export along with the genotyping data
 	 * @throws Exception the exception
 	 */
-	abstract public void exportData(OutputStream outputStream, String sModule, Integer nAssemblyId,Collection<GenotypingSample> samples1, Collection<GenotypingSample> samples2, ProgressIndicator progress, MongoCollection<Document> varColl, Document varQuery, Map<String, String> markerSynonyms, HashMap<String, Float> annotationFieldThresholds, HashMap<String, Float> annotationFieldThresholds2, List<GenotypingSample> samplesToExport, Map<String, InputStream> readyToExportFiles) throws Exception;
+	abstract public void exportData(OutputStream outputStream, String sModule, int projId, Integer nAssemblyId,Collection<GenotypingSample> samples1, Collection<GenotypingSample> samples2, ProgressIndicator progress, MongoCollection<Document> varColl, Document varQuery, long variantCount, Map<String, String> markerSynonyms, HashMap<String, Float> annotationFieldThresholds, HashMap<String, Float> annotationFieldThresholds2, List<GenotypingSample> samplesToExport, Map<String, InputStream> readyToExportFiles) throws Exception;
 
 //	/**
 //	 * Gets the individuals from samples.
