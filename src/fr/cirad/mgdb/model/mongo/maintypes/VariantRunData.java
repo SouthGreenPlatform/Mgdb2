@@ -17,23 +17,14 @@
 package fr.cirad.mgdb.model.mongo.maintypes;
 
 import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.TreeSet;
 
 import org.bson.codecs.pojo.annotations.BsonProperty;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.TypeAlias;
-//import org.springframework.data.mongodb.core.index.CompoundIndex;
-//import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 import fr.cirad.mgdb.model.mongo.subtypes.AbstractVariantData;
-import fr.cirad.mgdb.model.mongo.subtypes.ReferencePosition;
 
 /**
  * The Class VariantRunData.

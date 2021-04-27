@@ -19,11 +19,13 @@ package fr.cirad.mgdb.exporting;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 import org.apache.log4j.Logger;
 import org.bson.Document;
@@ -31,11 +33,7 @@ import org.bson.codecs.configuration.CodecRegistries;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.IntKeyMapPropertyCodecProvider;
 import org.bson.codecs.pojo.PojoCodecProvider;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.domain.Sort.Order;
-import org.springframework.data.mongodb.UncategorizedMongoDbException;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Query;
 
 import com.mongodb.BasicDBObject;
 import com.mongodb.MongoClientSettings;
@@ -46,14 +44,19 @@ import com.mongodb.client.MongoCursor;
 import com.mongodb.client.model.Collation;
 import com.mongodb.client.model.IndexOptions;
 
+import fr.cirad.mgdb.model.mongo.maintypes.GenotypingSample;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantData;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantDataV2;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantRunData;
+import fr.cirad.mgdb.model.mongo.maintypes.VariantRunData.VariantRunDataId;
 import fr.cirad.mgdb.model.mongo.maintypes.VariantRunDataV2;
 import fr.cirad.mgdb.model.mongo.subtypes.AbstractVariantData;
 import fr.cirad.mgdb.model.mongo.subtypes.AbstractVariantDataV2;
 import fr.cirad.mgdb.model.mongo.subtypes.ReferencePosition;
+import fr.cirad.mgdb.model.mongodao.MgdbDao;
+import fr.cirad.tools.Helper;
 import fr.cirad.tools.ProgressIndicator;
+import fr.cirad.tools.mongo.MongoTemplateManager;
 
 /**
  * The Interface IExportHandler.
@@ -135,38 +138,83 @@ public interface IExportHandler
 	 */
 	public List<String> getSupportedVariantTypes();
 	
-	public static List<AbstractVariantData> getMarkerListWithCorrectCollation(MongoTemplate mongoTemplate, Class varClass, Query varQuery, Integer nAssemblyId, int skip, int limit) {
-		varQuery.collation(org.springframework.data.mongodb.core.query.Collation.of("en_US").numericOrderingEnabled());
-		varQuery.with(Sort.by(Order.asc(VariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_SEQUENCE), Order.asc(VariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_START_SITE)));
-		varQuery.skip(skip).limit(limit).cursorBatchSize(limit);
-		String varCollName = mongoTemplate.getCollectionName(varClass);
-		try {
-			return mongoTemplate.find(varQuery, varClass, varCollName);
-		}
-		catch (UncategorizedMongoDbException umde) {
-			if (umde.getMessage().contains("Add an index")) {
-				LOG.info("Creating position index with collation en_US on variants collection");
-				
-				MongoCollection<Document> varColl = mongoTemplate.getCollection(varCollName);
-				String rpPath = nAssemblyId == null ? AbstractVariantDataV2.FIELDNAME_REFERENCE_POSITION : AbstractVariantData.FIELDNAME_REFERENCE_POSITION;
-				BasicDBObject indexKeys = new BasicDBObject(rpPath + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(rpPath + (nAssemblyId != null ? "." + nAssemblyId : "") + "." +  ReferencePosition.FIELDNAME_START_SITE, 1);
-				try {
-					varColl.dropIndex(indexKeys);	// it probably exists without the collation
-				}
-				catch (MongoCommandException ignored)
-				{}
-				
-				varColl.createIndex(indexKeys, new IndexOptions().collation(Collation.builder().locale("en_US").numericOrdering(true).build()));
-				
-				return mongoTemplate.find(varQuery, varClass, varCollName);
-			}
-			throw umde;
-		}
-	}
+//	public static List<AbstractVariantData> getVariantListSortedWithCollation(MongoTemplate mongoTemplate, Class varClass, Query varQuery, Integer nAssemblyId, int skip, int limit) {
+//		varQuery.collation(org.springframework.data.mongodb.core.query.Collation.of("en_US").numericOrderingEnabled());
+//		varQuery.with(Sort.by(Order.asc(VariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_SEQUENCE), Order.asc(VariantData.FIELDNAME_REFERENCE_POSITION + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_START_SITE)));
+//		varQuery.skip(skip).limit(limit).cursorBatchSize(limit);
+//		String varCollName = mongoTemplate.getCollectionName(varClass);
+//		try {
+//			return mongoTemplate.find(varQuery, varClass, varCollName);
+//		}
+//		catch (UncategorizedMongoDbException umde) {
+//			if (umde.getMessage().contains("Add an index")) {
+//				LOG.info("Creating position index with collation en_US on variants collection");
+//				
+//				MongoCollection<Document> varColl = mongoTemplate.getCollection(varCollName);
+//				String rpPath = nAssemblyId == null ? AbstractVariantDataV2.FIELDNAME_REFERENCE_POSITION : AbstractVariantData.FIELDNAME_REFERENCE_POSITION;
+//				BasicDBObject indexKeys = new BasicDBObject(rpPath + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(rpPath + (nAssemblyId != null ? "." + nAssemblyId : "") + "." +  ReferencePosition.FIELDNAME_START_SITE, 1);
+//				try {
+//					varColl.dropIndex(indexKeys);	// it probably exists without the collation
+//				}
+//				catch (MongoCommandException ignored)
+//				{}
+//				
+//				varColl.createIndex(indexKeys, new IndexOptions().collation(Collation.builder().locale("en_US").numericOrdering(true).build()));
+//				
+//				return mongoTemplate.find(varQuery, varClass, varCollName);
+//			}
+//			throw umde;
+//		}
+//	}
 
-	public static MongoCursor<Document> getMarkerCursorWithCorrectCollation(MongoCollection<Document> varColl, Class resultType, Document varQuery, Document projection, Integer nAssemblyId, int nQueryChunkSize) {
+	public static MongoCursor getVariantCursorSortedWithCollation(MongoTemplate mongoTemplate, MongoCollection<Document> varColl, Class resultType, Document varQuery, List<GenotypingSample> samplesToExport, boolean fIncludeMetadata, Integer nAssemblyId, int nQueryChunkSize) {
+		List<BasicDBObject> pipeline = new ArrayList<>();
+		String varCollName = varColl.getNamespace().getCollectionName();
+
+		if (!varQuery.isEmpty())
+			pipeline.add(new BasicDBObject("$match", varQuery));
+		
+		if (samplesToExport != null && !samplesToExport.isEmpty()) {	// we do need a $project operator
+			TreeSet<String> annotationFields = new TreeSet<>();
+			if (fIncludeMetadata)
+				for (GenotypingSample sample : samplesToExport.stream().filter(Helper.distinctByKey(GenotypingSample::getProjectId)).collect(Collectors.toList()))
+					annotationFields.addAll(MgdbDao.getAnnotationFields(mongoTemplate, sample.getProjectId(), false));
+
+			boolean fWorkingOnTempColl = varCollName.startsWith(MongoTemplateManager.TEMP_COLL_PREFIX);
+			
+			if (fWorkingOnTempColl)
+				pipeline.add(new BasicDBObject("$lookup", new BasicDBObject("from", mongoTemplate.getCollectionName(nAssemblyId != null ? VariantRunData.class : VariantRunDataV2.class)).append("localField", "_id").append("foreignField", "_id." + VariantRunDataId.FIELDNAME_VARIANT_ID).append("as", "r")));
+			
+			Document projection = new Document();
+			if (fWorkingOnTempColl)
+				projection.append("_id", new BasicDBObject("$arrayElemAt", Arrays.asList("$r._id", 0)));
+			projection.append(nAssemblyId != null ? (AbstractVariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId) : AbstractVariantDataV2.FIELDNAME_REFERENCE_POSITION, 1);
+			projection.append(nAssemblyId != null ? AbstractVariantData.FIELDNAME_KNOWN_ALLELE_LIST : AbstractVariantDataV2.FIELDNAME_KNOWN_ALLELE_LIST, 1);
+			projection.append(nAssemblyId != null ? AbstractVariantData.FIELDNAME_TYPE : AbstractVariantDataV2.FIELDNAME_TYPE, 1);
+			projection.append(nAssemblyId != null ? AbstractVariantData.FIELDNAME_SYNONYMS : VariantRunDataV2.FIELDNAME_SYNONYMS, 1);
+			projection.append(nAssemblyId != null ? AbstractVariantData.FIELDNAME_ANALYSIS_METHODS : VariantRunDataV2.FIELDNAME_ANALYSIS_METHODS, 1);
+			if (fIncludeMetadata)
+				projection.append(nAssemblyId != null ? AbstractVariantData.SECTION_ADDITIONAL_INFO : VariantRunDataV2.SECTION_ADDITIONAL_INFO, 1);
+			for (GenotypingSample sp : samplesToExport) {
+				if (nAssemblyId == null)
+					projection.append(VariantRunDataV2.FIELDNAME_SAMPLEGENOTYPES + "." + sp.getId(), !fWorkingOnTempColl ? 1 : new BasicDBObject("$arrayElemAt", Arrays.asList("$r." + VariantRunDataV2.FIELDNAME_SAMPLEGENOTYPES + "." + sp.getId(), 0)));
+				else {
+					projection.append(VariantRunData.FIELDNAME_GENOTYPES + "." + sp.getId(), !fWorkingOnTempColl ? 1 : new BasicDBObject("$arrayElemAt", Arrays.asList("$r." + VariantRunData.FIELDNAME_GENOTYPES + "." + sp.getId(), 0)));
+					if (fIncludeMetadata)
+						for (String annotationField : annotationFields)
+							projection.append(VariantRunData.FIELDNAME_METADATA + "." + annotationField + "." + sp.getId(), !fWorkingOnTempColl ? 1 : new BasicDBObject("$arrayElemAt", Arrays.asList("$r." + VariantRunData.FIELDNAME_METADATA + "." + annotationField + "." + sp.getId(), 0)));
+				}
+			}
+	//		if (nAssemblyId != null)
+	//			projection.append(VariantRunData.FIELDNAME_METADATA, 1);
+			pipeline.add(new BasicDBObject("$project", projection));
+		}
+		
+		pipeline.add(new BasicDBObject("$sort", sortDoc(nAssemblyId)));
+//		System.err.println(pipeline);
+
 		try {
-			return varColl.find(varQuery, resultType).projection(projection).collation(collationObj).sort(sortDoc(nAssemblyId)).batchSize(nQueryChunkSize).noCursorTimeout(true).iterator();
+			return varColl.aggregate(pipeline, resultType).collation(collationObj).batchSize(nQueryChunkSize).iterator();	/*FIXME: didn't find a way to set noCursorTimeOut on aggregation cursors*/
 		}
 		catch (MongoQueryException mqe) {
 			if (mqe.getMessage().contains("Add an index")) {
@@ -182,7 +230,7 @@ public interface IExportHandler
 				
 				varColl.createIndex(indexKeys, new IndexOptions().collation(collationObj));
 				
-				return varColl.find(varQuery, resultType).projection(projection).collation(collationObj).sort(sortDoc(nAssemblyId)).batchSize(nQueryChunkSize).noCursorTimeout(true).iterator();
+				return varColl.aggregate(pipeline, resultType).collation(collationObj).batchSize(nQueryChunkSize).iterator();	/*FIXME: didn't find a way to set noCursorTimeOut on aggregation cursors*/
 			}
 			throw mqe;
 		}

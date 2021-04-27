@@ -78,14 +78,14 @@ public abstract class AbstractIndividualOrientedExportHandler implements IExport
 	 * @param individualExportFiles the individual export files
 	 * @param fDeleteSampleExportFilesOnExit whether or not to delete sample export files on exit
 	 * @param progress the progress
-	 * @param varColl the variant collection (main or temp)
+	 * @param tmpVarCollName the variant collection name (null if not temporary)
 	 * @param varQuery query to apply on varColl
 	 * @param variantCount number of variants to export
 	 * @param markerSynonyms the marker synonyms
 	 * @param readyToExportFiles the ready to export files
 	 * @throws Exception the exception
 	 */
-	abstract public void exportData(OutputStream outputStream, String sModule, Integer nAssemblyId, Collection<File> individualExportFiles, boolean fDeleteSampleExportFilesOnExit, ProgressIndicator progress, MongoCollection<Document> varColl, Document varQuery, long variantCount, Map<String, String> markerSynonyms, Map<String, InputStream> readyToExportFiles) throws Exception;
+	abstract public void exportData(OutputStream outputStream, String sModule, Integer nAssemblyId, Collection<File> individualExportFiles, boolean fDeleteSampleExportFilesOnExit, ProgressIndicator progress, String tmpVarCollName, Document varQuery, long variantCount, Map<String, String> markerSynonyms, Map<String, InputStream> readyToExportFiles) throws Exception;
 
 	/**
 	 * Creates the export files.
@@ -93,7 +93,7 @@ public abstract class AbstractIndividualOrientedExportHandler implements IExport
 	 * @param sModule the module
 	 * @param projId the project ID
 	 * @param nAssemblyId ID of the assembly to work with
-	 * @param varColl the variant collection (main or temp)
+	 * @param tmpVarCollName the variant collection name (null if not temporary)
 	 * @param varQuery query to apply on varColl
 	 * @param variantCount number of variants to export
 	 * @param samples1 the samples for group 1
@@ -106,7 +106,7 @@ public abstract class AbstractIndividualOrientedExportHandler implements IExport
 	 * @return a map providing one File per individual
 	 * @throws Exception the exception
 	 */
-	public TreeMap<String, File> createExportFiles(String sModule, Integer nAssemblyId, MongoCollection<Document> varColl, Document varQuery, long variantCount, Collection<GenotypingSample> samples1, Collection<GenotypingSample> samples2, String exportID, HashMap<String, Float> annotationFieldThresholds, HashMap<String, Float> annotationFieldThresholds2, List<GenotypingSample> samplesToExport, final ProgressIndicator progress) throws Exception
+	public TreeMap<String, File> createExportFiles(String sModule, Integer nAssemblyId, String tmpVarCollName, Document varQuery, long variantCount, Collection<GenotypingSample> samples1, Collection<GenotypingSample> samples2, String exportID, HashMap<String, Float> annotationFieldThresholds, HashMap<String, Float> annotationFieldThresholds2, List<GenotypingSample> samplesToExport, final ProgressIndicator progress) throws Exception
 	{
 		long before = System.currentTimeMillis();
 
@@ -144,7 +144,7 @@ public abstract class AbstractIndividualOrientedExportHandler implements IExport
 
 		boolean fV2Model = nAssemblyId == null || nAssemblyId < 0;
 
-		MongoCollection genoColl = mongoTemplate.getDb().withCodecRegistry(pojoCodecRegistry).getCollection(mongoTemplate.getCollectionName(fV2Model ? VariantRunDataV2.class : VariantRunData.class));
+		MongoCollection collWithPojoCodec = mongoTemplate.getDb().withCodecRegistry(pojoCodecRegistry).getCollection(mongoTemplate.getCollectionName(fV2Model ? VariantRunDataV2.class : VariantRunData.class));
 		List<Document> pipeline = new ArrayList<Document>();
 
 		if (!varQuery.isEmpty()) // already checked above
@@ -163,7 +163,7 @@ public abstract class AbstractIndividualOrientedExportHandler implements IExport
 				projection.append(VariantRunData.FIELDNAME_GENOTYPES + "." + sp.getId(), 1);
 		}
 		
-		MongoCursor markerCursor = IExportHandler.getMarkerCursorWithCorrectCollation(genoColl, fV2Model ? VariantRunDataV2.class : VariantRunData.class, varQuery, projection, nAssemblyId, nQueryChunkSize);
+		MongoCursor markerCursor = IExportHandler.getVariantCursorSortedWithCollation(mongoTemplate, collWithPojoCodec, fV2Model ? VariantRunDataV2.class : VariantRunData.class, varQuery, samplesToExport, false, nAssemblyId, nQueryChunkSize);
 //		LOG.debug("cursor obtained in " + (System.currentTimeMillis() - b4) + "ms");
 		LinkedHashMap<String, List<Object>> markerRunsToWrite = new LinkedHashMap<>();
 

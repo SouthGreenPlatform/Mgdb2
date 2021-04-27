@@ -16,6 +16,7 @@
  *******************************************************************************/
 package fr.cirad.mgdb.model.mongo.maintypes;
 
+import htsjdk.variant.vcf.VCFAltHeaderLine;
 import htsjdk.variant.vcf.VCFFilterHeaderLine;
 import htsjdk.variant.vcf.VCFFormatHeaderLine;
 import htsjdk.variant.vcf.VCFHeader;
@@ -34,9 +35,6 @@ import org.apache.log4j.Logger;
 import org.springframework.data.annotation.TypeAlias;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
-
-import com.mongodb.BasicDBObject;
-import com.mongodb.DBObject;
 
 /**
  * The Class DBVCFHeader.
@@ -93,20 +91,21 @@ public class DBVCFHeader
 	/** The write engine headers. */
 	private boolean writeEngineHeaders; 
 	
-	/** The m info meta data. */
-	private Map<String, VCFInfoHeaderLine> mInfoMetaData = new LinkedHashMap();
+	/** The info meta data. */
+	private Map<String, VCFInfoHeaderLine> mInfoMetaData = new LinkedHashMap<>();
 	
-	/** The m format meta data. */
-	private Map<String, VCFFormatHeaderLine> mFormatMetaData = new LinkedHashMap();
+	/** The format meta data. */
+	private Map<String, VCFFormatHeaderLine> mFormatMetaData = new LinkedHashMap<>();
 	
-	/** The m filter meta data. */
-	private Map<String, VCFFilterHeaderLine> mFilterMetaData = new LinkedHashMap();
+	/** The filter meta data. */
+	private Map<String, VCFFilterHeaderLine> mFilterMetaData = new LinkedHashMap<>();
 	
-	/** The m other meta data. */
-	private Map<String, VCFHeaderLine> mOtherMetaData = new LinkedHashMap();
+	/** The other meta data. */
+	private Map<String, VCFHeaderLine> mOtherMetaData = new LinkedHashMap<>();
 	
-	/** The m meta data. */
-	private Map<String, VCFSimpleHeaderLine> mMetaData = new LinkedHashMap();
+	/** The meta data. */
+	private Map<String, VCFSimpleHeaderLine> mMetaData = new LinkedHashMap<>();
+
 
 	/** The Constant LOG. */
 	private static final Logger LOG = Logger.getLogger(DBVCFHeader.class);
@@ -116,31 +115,6 @@ public class DBVCFHeader
 	 */
 	public DBVCFHeader()
 	{
-	}
-	
-	/**
-	 * Instantiates a new DBVCF header.
-	 *
-	 * @param id the id
-	 * @param writeCommandLine the write command line
-	 * @param writeEngineHeaders the write engine headers
-	 * @param mInfoMetaData the m info meta data
-	 * @param mFormatMetaData the m format meta data
-	 * @param mFilterMetaData the m filter meta data
-	 * @param mOtherMetaData the m other meta data
-	 * @param mMetaData the m meta data
-	 */
-	public DBVCFHeader(VcfHeaderId id, Boolean writeCommandLine, Boolean writeEngineHeaders, Map<String, VCFInfoHeaderLine> mInfoMetaData, Map<String, VCFFormatHeaderLine> mFormatMetaData, Map<String, VCFFilterHeaderLine> mFilterMetaData, Map<String, VCFHeaderLine> mOtherMetaData, Map<String, VCFSimpleHeaderLine> mMetaData)
-	{
-		super();
-		this.id = id;
-		this.writeCommandLine = writeCommandLine;
-		this.writeEngineHeaders = writeEngineHeaders;
-		this.mInfoMetaData = mInfoMetaData;
-		this.mFormatMetaData = mFormatMetaData;
-		this.mFilterMetaData = mFilterMetaData;
-		this.mOtherMetaData = mOtherMetaData;
-		this.mMetaData = mMetaData;
 	}
 
 	/**
@@ -165,7 +139,7 @@ public class DBVCFHeader
 				mInfoMetaData.put(((VCFInfoHeaderLine) line).getID(), (VCFInfoHeaderLine) line);
 			else if (VCFFilterHeaderLine.class.equals(line.getClass()))
 				mFilterMetaData.put(((VCFFilterHeaderLine) line).getID(), (VCFFilterHeaderLine) line);
-			else if (VCFSimpleHeaderLine.class.equals(line.getClass()))
+			else if (VCFSimpleHeaderLine.class.equals(line.getClass()) || VCFAltHeaderLine.class.equals(line.getClass()))
 				mMetaData.put(((VCFSimpleHeaderLine) line).getKey(), (VCFSimpleHeaderLine) line);
 		}
 	}
@@ -225,90 +199,90 @@ public class DBVCFHeader
 	}
 
 	/**
-	 * Gets the m info meta data.
+	 * Gets The info meta data.
 	 *
-	 * @return the m info meta data
+	 * @return The info meta data
 	 */
 	public Map<String, VCFInfoHeaderLine> getmInfoMetaData() {
 		return mInfoMetaData;
 	}
 
 	/**
-	 * Setm info meta data.
+	 * Sets the info meta data.
 	 *
-	 * @param mInfoMetaData the m info meta data
+	 * @param mInfoMetaData The info meta data
 	 */
 	public void setmInfoMetaData(Map<String, VCFInfoHeaderLine> mInfoMetaData) {
 		this.mInfoMetaData = mInfoMetaData;
 	}
 
 	/**
-	 * Gets the m format meta data.
+	 * Gets The format meta data.
 	 *
-	 * @return the m format meta data
+	 * @return The format meta data
 	 */
 	public Map<String, VCFFormatHeaderLine> getmFormatMetaData() {
 		return mFormatMetaData;
 	}
 
 	/**
-	 * Setm format meta data.
+	 * Sets the format meta data.
 	 *
-	 * @param mFormatMetaData the m format meta data
+	 * @param mFormatMetaData The format meta data
 	 */
 	public void setmFormatMetaData(Map<String, VCFFormatHeaderLine> mFormatMetaData) {
 		this.mFormatMetaData = mFormatMetaData;
 	}
 
 	/**
-	 * Gets the m filter meta data.
+	 * Gets The filter meta data.
 	 *
-	 * @return the m filter meta data
+	 * @return The filter meta data
 	 */
 	public Map<String, VCFFilterHeaderLine> getmFilterMetaData() {
 		return mFilterMetaData;
 	}
 
 	/**
-	 * Setm filter meta data.
+	 * Sets the filter meta data.
 	 *
-	 * @param mFilterMetaData the m filter meta data
+	 * @param mFilterMetaData The filter meta data
 	 */
 	public void setmFilterMetaData(Map<String, VCFFilterHeaderLine> mFilterMetaData) {
 		this.mFilterMetaData = mFilterMetaData;
 	}
 
 	/**
-	 * Gets the m other meta data.
+	 * Gets The other meta data.
 	 *
-	 * @return the m other meta data
+	 * @return The other meta data
 	 */
 	public Map<String, VCFHeaderLine> getmOtherMetaData() {
 		return mOtherMetaData;
 	}
 
 	/**
-	 * Setm other meta data.
+	 * Sets the other meta data.
 	 *
-	 * @param mOtherMetaData the m other meta data
+	 * @param mOtherMetaData The other meta data
 	 */
 	public void setmOtherMetaData(Map<String, VCFHeaderLine> mOtherMetaData) {
 		this.mOtherMetaData = mOtherMetaData;
 	}
 
 	/**
-	 * Gets the m meta data.
+	 * Gets The meta data.
 	 *
-	 * @return the m meta data
+	 * @return The meta data
 	 */
 	public Map<String, VCFSimpleHeaderLine> getmMetaData() {
 		return mMetaData;
 	}
 
 	/**
-	 * Setm meta data.
+	 * Sets the meta data.
 	 *
-	 * @param mMetaData the m meta data
+	 * @param mMetaData The meta data
 	 */
 	public void setmMetaData(Map<String, VCFSimpleHeaderLine> mMetaData) {
 		this.mMetaData = mMetaData;

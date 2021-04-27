@@ -577,7 +577,7 @@ abstract public class AbstractVariantData {
 	}
 
 	// tells whether applied filters imply to treat this genotype as missing data
-    public static boolean gtPassesVcfAnnotationFilters(String individualName, int sampleId, HashMap<String, HashMap<Integer, Object>> metadata, Collection<String> individuals1, HashMap<String, Float> annotationFieldThresholds, Collection<String> individuals2, HashMap<String, Float> annotationFieldThresholds2)
+    public static boolean gtPassesVcfAnnotationFilters(String individualName, Integer sampleId, HashMap<String, HashMap<Integer, Object>> metadata, Collection<String> individuals1, HashMap<String, Float> annotationFieldThresholds, Collection<String> individuals2, HashMap<String, Float> annotationFieldThresholds2)
     {
 		List<HashMap<String, Float>> thresholdsToCheck = new ArrayList<HashMap<String, Float>>();
 		if (individuals1.contains(individualName))
@@ -591,7 +591,7 @@ abstract public class AbstractVariantData {
 				Integer annotationValue = null;
 				try
 				{
-					annotationValue = (Integer) metadata.get(annotationField).get(sampleId);
+					annotationValue = (Integer) metadata.get(annotationField).get(sampleId.toString());
 				}
 				catch (Exception ignored)
 				{}
@@ -846,9 +846,9 @@ abstract public class AbstractVariantData {
     					if (!gtPassesVcfAnnotationFilters(sample.getIndividual(), sample.getId(), run.getMetadata(), individuals1, annotationFieldThresholds1, individuals2, annotationFieldThresholds2))
     						continue individualLoop;	// skip genotype
 
-    					if (VCFConstants.GENOTYPE_ALLELE_DEPTHS.equals(key))
+    					if (VCFConstants.GENOTYPE_KEY.equals(key))
     					{
-    						String ad = (String) run.getMetadata().get(key).get(sample.getId());
+    						String ad = (String) perSampleFieldData.get(sample.getId().toString());
     						if (ad != null)
     						{
     							int[] adArray = Helper.csvToIntArray(ad);
@@ -862,7 +862,7 @@ abstract public class AbstractVariantData {
     					}
     					else if (VCFConstants.DEPTH_KEY.equals(key) || VCFConstants.GENOTYPE_QUALITY_KEY.equals(key))
     					{
-    						Integer value = (Integer) run.getMetadata().get(key).get(sample.getId());
+    						Integer value = (Integer) perSampleFieldData.get(sample.getId().toString());
     						if (value != null)
     						{
     							if (VCFConstants.DEPTH_KEY.equals(key))
@@ -873,7 +873,7 @@ abstract public class AbstractVariantData {
     					}
     					else if (VCFConstants.GENOTYPE_PL_KEY.equals(key) || VCFConstants.GENOTYPE_LIKELIHOODS_KEY.equals(key))
     					{
-    						String fieldVal = (String) run.getMetadata().get(key).get(sample.getId());
+    						String fieldVal = (String) perSampleFieldData.get(sample.getId().toString());
     						if (fieldVal != null)
     						{
     							int[] plArray = VCFConstants.GENOTYPE_PL_KEY.equals(key) ? Helper.csvToIntArray(fieldVal) : GenotypeLikelihoods.fromGLField(fieldVal).getAsPLs();
@@ -882,8 +882,14 @@ abstract public class AbstractVariantData {
     							gb.PL(plArray);
     						}
     					}
+    					else if (VCFConstants.GENOTYPE_ALLELE_DEPTHS.equals(key))
+    					{
+    						String fieldVal = (String) perSampleFieldData.get(sample.getId().toString());
+    						if (fieldVal != null)
+    							gb.AD(Helper.csvToIntArray(fieldVal));
+    					}
     					else if (!key.equals(VariantData.GT_FIELD_PHASED_GT) && !key.equals(VariantData.GT_FIELD_PHASED_ID) && !key.equals(VariantRunData.FIELDNAME_ADDITIONAL_INFO_EFFECT_GENE) && !key.equals(VariantRunData.FIELDNAME_ADDITIONAL_INFO_EFFECT_NAME)) // exclude some internally created fields that we don't want to export
-    						gb.attribute(key, run.getMetadata().get(key).get(sample.getId())); // looks like we have an extended attribute				
+    						gb.attribute(key, perSampleFieldData.get(sample.getId().toString())); // looks like we have an extended attribute				
     				}
     				genotypes.add(gb.make());
     			}

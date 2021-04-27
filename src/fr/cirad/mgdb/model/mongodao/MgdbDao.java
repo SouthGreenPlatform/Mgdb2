@@ -52,6 +52,7 @@ import fr.cirad.mgdb.model.mongo.maintypes.VariantRunDataV2;
 import fr.cirad.mgdb.model.mongo.maintypes.DBVCFHeader.VcfHeaderId;
 import fr.cirad.mgdb.model.mongo.subtypes.ReferencePosition;
 import fr.cirad.tools.mongo.MongoTemplateManager;
+import htsjdk.variant.vcf.VCFConstants;
 import htsjdk.variant.vcf.VCFFormatHeaderLine;
 import htsjdk.variant.vcf.VCFHeaderLineCount;
 import htsjdk.variant.vcf.VCFHeaderLineType;
@@ -503,7 +504,7 @@ public class MgdbDao
 			DBVCFHeader vcfHeader = DBVCFHeader.fromDocument(headerCursor.next());
         	for (String key : vcfHeader.getmFormatMetaData().keySet()) {
         		VCFFormatHeaderLine vcfFormatHeaderLine = vcfHeader.getmFormatMetaData().get(key);
-        		if (!fOnlySearchableFields || (vcfFormatHeaderLine.getType().equals(VCFHeaderLineType.Integer) && vcfFormatHeaderLine.getCountType() == VCFHeaderLineCount.INTEGER && vcfFormatHeaderLine.getCount() == 1))
+        		if (!fOnlySearchableFields || (!key.equals(VCFConstants.GENOTYPE_KEY) && vcfFormatHeaderLine.getType().equals(VCFHeaderLineType.Integer) && vcfFormatHeaderLine.getCountType() == VCFHeaderLineCount.INTEGER && vcfFormatHeaderLine.getCount() == 1))
         			result.add(key);
         	}
 		}
