@@ -144,7 +144,7 @@ public abstract class AbstractIndividualOrientedExportHandler implements IExport
 
 		boolean fV2Model = nAssemblyId == null || nAssemblyId < 0;
 
-		MongoCollection collWithPojoCodec = mongoTemplate.getDb().withCodecRegistry(pojoCodecRegistry).getCollection(mongoTemplate.getCollectionName(fV2Model ? VariantRunDataV2.class : VariantRunData.class));
+		MongoCollection collWithPojoCodec = mongoTemplate.getDb().withCodecRegistry(pojoCodecRegistry).getCollection(tmpVarCollName != null ? tmpVarCollName : mongoTemplate.getCollectionName(fV2Model ? VariantRunDataV2.class : VariantRunData.class));
 		List<Document> pipeline = new ArrayList<Document>();
 
 		if (!varQuery.isEmpty()) // already checked above

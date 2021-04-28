@@ -76,10 +76,10 @@ public interface IExportHandler
 
 	static final CodecRegistry pojoCodecRegistry = CodecRegistries.fromRegistries(MongoClientSettings.getDefaultCodecRegistry(), CodecRegistries.fromProviders(PojoCodecProvider.builder().register(new IntKeyMapPropertyCodecProvider()).automatic(true).build()));
 
-	static Document sortDoc(Integer nAssemblyId) {
-		String posPath = nAssemblyId != null ? (VariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId) : VariantDataV2.FIELDNAME_REFERENCE_POSITION;
-		return new Document(posPath  + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(posPath + "." + ReferencePosition.FIELDNAME_START_SITE, 1);
-	}
+//	static Document sortDoc(Integer nAssemblyId) {
+//		String posPath = nAssemblyId != null ? (VariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId) : VariantDataV2.FIELDNAME_REFERENCE_POSITION;
+//		return new Document(posPath  + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(posPath + "." + ReferencePosition.FIELDNAME_START_SITE, 1);
+//	}
 	
 	static final Collation collationObj = Collation.builder().numericOrdering(true).locale("en_US").build();
     
@@ -173,8 +173,18 @@ public interface IExportHandler
 
 		if (!varQuery.isEmpty())
 			pipeline.add(new BasicDBObject("$match", varQuery));
-		
-		if (samplesToExport != null && !samplesToExport.isEmpty()) {	// we do need a $project operator
+
+		String refPosPath = nAssemblyId != null ? (AbstractVariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId) : AbstractVariantDataV2.FIELDNAME_REFERENCE_POSITION;
+		Document projection = new Document(new BasicDBObject("snl" /*seq name length: hack to apply numeric ordering (using collation with $lookup makes the query execution hang)*/, new BasicDBObject("$strLenBytes", new BasicDBObject("$ifNull", Arrays.asList("$" + refPosPath + "." + ReferencePosition.FIELDNAME_SEQUENCE, "")))));
+		projection.append(refPosPath, 1);
+		projection.append(nAssemblyId != null ? AbstractVariantData.FIELDNAME_KNOWN_ALLELE_LIST : AbstractVariantDataV2.FIELDNAME_KNOWN_ALLELE_LIST, 1);
+		projection.append(nAssemblyId != null ? AbstractVariantData.FIELDNAME_TYPE : AbstractVariantDataV2.FIELDNAME_TYPE, 1);
+		projection.append(nAssemblyId != null ? AbstractVariantData.FIELDNAME_SYNONYMS : VariantRunDataV2.FIELDNAME_SYNONYMS, 1);
+		projection.append(nAssemblyId != null ? AbstractVariantData.FIELDNAME_ANALYSIS_METHODS : VariantRunDataV2.FIELDNAME_ANALYSIS_METHODS, 1);
+		if (fIncludeMetadata)
+			projection.append(nAssemblyId != null ? AbstractVariantData.SECTION_ADDITIONAL_INFO : VariantRunDataV2.SECTION_ADDITIONAL_INFO, 1);
+
+		if (samplesToExport != null && !samplesToExport.isEmpty()) {	// project sample-level fields
 			TreeSet<String> annotationFields = new TreeSet<>();
 			if (fIncludeMetadata)
 				for (GenotypingSample sample : samplesToExport.stream().filter(Helper.distinctByKey(GenotypingSample::getProjectId)).collect(Collectors.toList()))
@@ -185,16 +195,9 @@ public interface IExportHandler
 			if (fWorkingOnTempColl)
 				pipeline.add(new BasicDBObject("$lookup", new BasicDBObject("from", mongoTemplate.getCollectionName(nAssemblyId != null ? VariantRunData.class : VariantRunDataV2.class)).append("localField", "_id").append("foreignField", "_id." + VariantRunDataId.FIELDNAME_VARIANT_ID).append("as", "r")));
 			
-			Document projection = new Document();
 			if (fWorkingOnTempColl)
 				projection.append("_id", new BasicDBObject("$arrayElemAt", Arrays.asList("$r._id", 0)));
-			projection.append(nAssemblyId != null ? (AbstractVariantData.FIELDNAME_REFERENCE_POSITION + "." + nAssemblyId) : AbstractVariantDataV2.FIELDNAME_REFERENCE_POSITION, 1);
-			projection.append(nAssemblyId != null ? AbstractVariantData.FIELDNAME_KNOWN_ALLELE_LIST : AbstractVariantDataV2.FIELDNAME_KNOWN_ALLELE_LIST, 1);
-			projection.append(nAssemblyId != null ? AbstractVariantData.FIELDNAME_TYPE : AbstractVariantDataV2.FIELDNAME_TYPE, 1);
-			projection.append(nAssemblyId != null ? AbstractVariantData.FIELDNAME_SYNONYMS : VariantRunDataV2.FIELDNAME_SYNONYMS, 1);
-			projection.append(nAssemblyId != null ? AbstractVariantData.FIELDNAME_ANALYSIS_METHODS : VariantRunDataV2.FIELDNAME_ANALYSIS_METHODS, 1);
-			if (fIncludeMetadata)
-				projection.append(nAssemblyId != null ? AbstractVariantData.SECTION_ADDITIONAL_INFO : VariantRunDataV2.SECTION_ADDITIONAL_INFO, 1);
+
 			for (GenotypingSample sp : samplesToExport) {
 				if (nAssemblyId == null)
 					projection.append(VariantRunDataV2.FIELDNAME_SAMPLEGENOTYPES + "." + sp.getId(), !fWorkingOnTempColl ? 1 : new BasicDBObject("$arrayElemAt", Arrays.asList("$r." + VariantRunDataV2.FIELDNAME_SAMPLEGENOTYPES + "." + sp.getId(), 0)));
@@ -207,33 +210,36 @@ public interface IExportHandler
 			}
 	//		if (nAssemblyId != null)
 	//			projection.append(VariantRunData.FIELDNAME_METADATA, 1);
-			pipeline.add(new BasicDBObject("$project", projection));
 		}
-		
-		pipeline.add(new BasicDBObject("$sort", sortDoc(nAssemblyId)));
+
+		pipeline.add(new BasicDBObject("$project", projection));
+		pipeline.add(new BasicDBObject("$sort", new Document("snl", 1).append(refPosPath  + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(refPosPath + "." + ReferencePosition.FIELDNAME_START_SITE, 1)));
 //		System.err.println(pipeline);
 
 		try {
-			return varColl.aggregate(pipeline, resultType).collation(collationObj).batchSize(nQueryChunkSize).iterator();	/*FIXME: didn't find a way to set noCursorTimeOut on aggregation cursors*/
+			return varColl.aggregate(pipeline, resultType)/*.collation(Collation.builder().locale("en_US").numericOrdering(false).build())*/.allowDiskUse(true).batchSize(nQueryChunkSize).iterator();	/*FIXME: didn't find a way to set noCursorTimeOut on aggregation cursors*/
 		}
 		catch (MongoQueryException mqe) {
 			if (mqe.getMessage().contains("Add an index")) {
-				LOG.info("Creating position index with collation en_US on variants collection");
-				
-				String rpPath = nAssemblyId == null ? AbstractVariantDataV2.FIELDNAME_REFERENCE_POSITION : AbstractVariantData.FIELDNAME_REFERENCE_POSITION;				
-				BasicDBObject indexKeys = new BasicDBObject(rpPath + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(rpPath + (nAssemblyId != null ? "." + nAssemblyId : "") + "." +  ReferencePosition.FIELDNAME_START_SITE, 1);
-				try {
-					varColl.dropIndex(indexKeys);	// it probably exists without the collation
-				}
-				catch (MongoCommandException ignored)
-				{}
-				
-				varColl.createIndex(indexKeys, new IndexOptions().collation(collationObj));
-				
-				return varColl.aggregate(pipeline, resultType).collation(collationObj).batchSize(nQueryChunkSize).iterator();	/*FIXME: didn't find a way to set noCursorTimeOut on aggregation cursors*/
+				createPosIndex(varColl, nAssemblyId);
+				return varColl.aggregate(pipeline, resultType)/*.collation(collationObj)*/.allowDiskUse(true).batchSize(nQueryChunkSize).iterator();	/*FIXME: didn't find a way to set noCursorTimeOut on aggregation cursors*/
 			}
 			throw mqe;
 		}
+	}
+	
+	static void createPosIndex(MongoCollection coll, Integer nAssemblyId) {
+		LOG.info("Creating position index" + (nAssemblyId != null ? " for assembly " + nAssemblyId : "") + " on collection " + coll.getNamespace());
+		
+		String rpPath = nAssemblyId == null ? AbstractVariantDataV2.FIELDNAME_REFERENCE_POSITION : AbstractVariantData.FIELDNAME_REFERENCE_POSITION;				
+		BasicDBObject indexKeys = new BasicDBObject(rpPath + (nAssemblyId != null ? "." + nAssemblyId : "") + "." + ReferencePosition.FIELDNAME_SEQUENCE, 1).append(rpPath + (nAssemblyId != null ? "." + nAssemblyId : "") + "." +  ReferencePosition.FIELDNAME_START_SITE, 1);
+		try {
+			coll.dropIndex(indexKeys);	// in case it already exists without the collation
+		}
+		catch (MongoCommandException ignored)
+		{}
+		
+		coll.createIndex(indexKeys/*, new IndexOptions().collation(collationObj)*/);
 	}
 	
     static void readAndWrite(MongoCursor markerCursor, ProgressIndicator progress, FileWriter warningFileWriter, boolean fV2Model, int nQueryChunkSize, LinkedHashMap<String, List<Object>> markerRunsToWrite, Thread writingThread, long variantCount) throws IOException, InterruptedException, ExecutionException {
